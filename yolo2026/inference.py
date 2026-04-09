@@ -54,10 +54,28 @@ def infer(image_path, output_path):
     print(f"推理结果已保存到: {output_path}")
 
 if __name__ == "__main__":
-    # 创建测试图片
+    # 创建测试图片（猫的图片）
     test_image = np.zeros((416, 416, 3), dtype=np.uint8)
-    cv2.rectangle(test_image, (100, 100), (300, 300), (255, 0, 0), 2)
-    cv2.putText(test_image, "Test Image", (150, 200), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+    # 绘制一个简单的猫的轮廓
+    cv2.rectangle(test_image, (100, 150), (316, 350), (160, 120, 80), -1)  # 猫的身体
+    cv2.circle(test_image, (180, 120), 30, (160, 120, 80), -1)  # 猫的头部
+    cv2.circle(test_image, (240, 120), 30, (160, 120, 80), -1)  # 猫的头部
+    cv2.rectangle(test_image, (170, 100), (250, 140), (160, 120, 80), -1)  # 猫的头部
+    cv2.circle(test_image, (190, 110), 5, (0, 0, 0), -1)  # 左眼
+    cv2.circle(test_image, (230, 110), 5, (0, 0, 0), -1)  # 右眼
+    cv2.line(test_image, (200, 125), (220, 125), (0, 0, 0), 2)  # 嘴巴
+    cv2.line(test_image, (150, 180), (100, 130), (160, 120, 80), 10)  # 左耳朵
+    cv2.line(test_image, (270, 180), (320, 130), (160, 120, 80), 10)  # 右耳朵
+    cv2.line(test_image, (130, 350), (100, 400), (160, 120, 80), 10)  # 左前腿
+    cv2.line(test_image, (290, 350), (320, 400), (160, 120, 80), 10)  # 右前腿
+    cv2.line(test_image, (150, 350), (130, 416), (160, 120, 80), 10)  # 左后腿
+    cv2.line(test_image, (270, 350), (290, 416), (160, 120, 80), 10)  # 右后腿
+    # 绘制人的手
+    cv2.circle(test_image, (80, 100), 20, (255, 200, 180), -1)  # 手
+    cv2.line(test_image, (80, 100), (50, 80), (255, 200, 180), 8)  # 手指
+    cv2.line(test_image, (80, 100), (60, 60), (255, 200, 180), 8)  # 手指
+    cv2.line(test_image, (80, 100), (80, 50), (255, 200, 180), 8)  # 手指
+    cv2.line(test_image, (80, 100), (100, 60), (255, 200, 180), 8)  # 手指
     cv2.imwrite("test_image.jpg", test_image)
     
     # 运行推理
