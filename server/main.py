@@ -4,7 +4,7 @@ import asyncio
 import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Depends, Security, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Depends, Security, WebSocket, WebSocketDisconnect, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.security.api_key import APIKeyHeader
@@ -96,7 +96,7 @@ def _get_camera_manager():
     return cm
 
 
-@app.get("/cameras")
+@app.get("/cameras", dependencies=[Depends(verify_api_key)])
 def list_cameras():
     cm = _get_camera_manager()
     return {
@@ -105,7 +105,7 @@ def list_cameras():
     }
 
 
-@app.post("/cameras/{camera_id}/start")
+@app.post("/cameras/{camera_id}/start", dependencies=[Depends(verify_api_key)])
 def start_camera(camera_id: str):
     cm = _get_camera_manager()
     available = cm.discover_cameras()
@@ -120,14 +120,14 @@ def start_camera(camera_id: str):
     return {"camera_id": camera_id, "status": stream.status}
 
 
-@app.post("/cameras/{camera_id}/stop")
+@app.post("/cameras/{camera_id}/stop", dependencies=[Depends(verify_api_key)])
 def stop_camera(camera_id: str):
     cm = _get_camera_manager()
     cm.stop_camera(camera_id)
     return {"camera_id": camera_id, "status": "stopped"}
 
 
-@app.get("/cameras/{camera_id}/frame")
+@app.get("/cameras/{camera_id}/frame", dependencies=[Depends(verify_api_key)])
 def get_camera_frame(camera_id: str):
     cm = _get_camera_manager()
     stream = cm.get_stream(camera_id)
@@ -139,7 +139,7 @@ def get_camera_frame(camera_id: str):
     return StreamingResponse(iter([frame_bytes]), media_type="image/jpeg")
 
 
-@app.get("/cameras/{camera_id}/last_detection")
+@app.get("/cameras/{camera_id}/last_detection", dependencies=[Depends(verify_api_key)])
 def get_last_detection(camera_id: str):
     cm = _get_camera_manager()
     stream = cm.get_stream(camera_id)
@@ -151,7 +151,25 @@ def get_last_detection(camera_id: str):
     return StreamingResponse(iter([frame_bytes]), media_type="image/jpeg")
 
 
-@app.get("/cameras/{camera_id}/status")
+@app.get("/cameras/{camera_id}/detections", dependencies=[Depends(verify_api_key)])
+def get_camera_detections(camera_id: str):
+    cm = _get_camera_manager()
+    stream = cm.get_stream(camera_id)
+    if stream is None:
+        raise HTTPException(status_code=404, detail=f"Camera '{camera_id}' not streaming")
+    event = stream.get_last_detection_event()
+    if event is None:
+        return {"camera_id": camera_id, "detected": False}
+    return {
+        "camera_id": camera_id,
+        "detected": True,
+        "timestamp": event.timestamp,
+        "confidence": event.confidence,
+        "bbox": event.bbox,
+    }
+
+
+@app.get("/cameras/{camera_id}/status", dependencies=[Depends(verify_api_key)])
 def get_camera_status(camera_id: str):
     cm = _get_camera_manager()
     stream = cm.get_stream(camera_id)
@@ -162,6 +180,12 @@ def get_camera_status(camera_id: str):
 
 @app.websocket("/ws/cameras/{camera_id}")
 async def camera_websocket(websocket: WebSocket, camera_id: str):
+    # Verify API Key from query param or header before accepting
+    api_key = websocket.query_params.get("api_key") or websocket.headers.get("x-api-key")
+    if api_key != API_KEY:
+        await websocket.close(code=4001, reason="Invalid or missing API Key")
+        return
+
     cm = _get_camera_manager()
     stream = cm.get_stream(camera_id)
     if stream is None:

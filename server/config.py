@@ -18,7 +18,8 @@ MOCK_MODE = os.getenv("DEEPMCP_MOCK_MODE", "false").lower() == "true"
 
 # Camera configuration
 CAMERA_ENABLED = os.getenv("DEEPMCP_CAMERA_ENABLED", "true").lower() == "true"
-CAMERA_DEVICE_IDS = os.getenv("DEEPMCP_CAMERA_DEVICE_IDS", "0").split(",")
+_raw_camera_ids = os.getenv("DEEPMCP_CAMERA_DEVICE_IDS", "0")
+CAMERA_DEVICE_IDS = [d.strip() for d in _raw_camera_ids.split(",") if d.strip() != ""]
 CAMERA_INFERENCE_INTERVAL = float(os.getenv("DEEPMCP_CAMERA_INFERENCE_INTERVAL", "0.2"))
 CAMERA_PERSON_CONFIDENCE = float(os.getenv("DEEPMCP_CAMERA_PERSON_CONFIDENCE", "0.5"))
 CAMERA_WEBHOOK_COOLDOWN = float(os.getenv("DEEPMCP_CAMERA_WEBHOOK_COOLDOWN", "5.0"))

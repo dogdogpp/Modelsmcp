@@ -69,8 +69,14 @@ def call_tool(request: CallRequest) -> CallResponse:
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _decode_image(image_b64: str) -> Image.Image:
-    """Decode a base64 image string (with or without data URI prefix) to PIL Image."""
+def _decode_image(image_input: str) -> Image.Image:
+    """Decode an image from base64 string (with or without data URI prefix) or HTTP URL to PIL Image."""
+    if image_input.startswith("http://") or image_input.startswith("https://"):
+        import urllib.request
+        with urllib.request.urlopen(image_input, timeout=10) as resp:
+            image_bytes = resp.read()
+        return Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    image_b64 = image_input
     if "," in image_b64:
         image_b64 = image_b64.split(",", 1)[1]
     image_bytes = base64.b64decode(image_b64)

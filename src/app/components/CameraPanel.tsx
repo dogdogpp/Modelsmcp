@@ -36,6 +36,14 @@ interface DetectionEvent {
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8081";
 const WS_BASE = API_BASE.replace(/^http/, "ws");
+const API_KEY = import.meta.env.VITE_API_KEY || "deepmcp-dev-key";
+
+function authHeaders(): Record<string, string> {
+  return {
+    "Content-Type": "application/json",
+    "X-API-Key": API_KEY,
+  };
+}
 
 export function CameraPanel() {
   const [cameras, setCameras] = useState<CameraInfo[]>([]);
@@ -50,13 +58,12 @@ export function CameraPanel() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
-  const detectionsRef = useRef<DetectionEvent[]>([]);
   const frameCountRef = useRef(0);
   const lastFpsTimeRef = useRef(Date.now());
 
   const fetchCameras = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/cameras`);
+      const res = await fetch(`${API_BASE}/cameras`, { headers: authHeaders() });
       if (!res.ok) throw new Error("Failed to fetch cameras");
       const data = await res.json();
       setCameras(data.available || []);
@@ -109,7 +116,10 @@ export function CameraPanel() {
     setError(null);
 
     try {
-      const res = await fetch(`${API_BASE}/cameras/${selectedCamera}/start`, { method: "POST" });
+      const res = await fetch(`${API_BASE}/cameras/${selectedCamera}/start`, {
+        method: "POST",
+        headers: authHeaders(),
+      });
       if (!res.ok) throw new Error("Failed to start camera");
       setIsStreaming(true);
     } catch (e) {
@@ -127,7 +137,10 @@ export function CameraPanel() {
       wsRef.current = null;
     }
     try {
-      await fetch(`${API_BASE}/cameras/${selectedCamera}/stop`, { method: "POST" });
+      await fetch(`${API_BASE}/cameras/${selectedCamera}/stop`, {
+        method: "POST",
+        headers: authHeaders(),
+      });
       setIsStreaming(false);
       setStreamFps(0);
     } catch (e) {
@@ -140,7 +153,7 @@ export function CameraPanel() {
   useEffect(() => {
     if (!isStreaming || !selectedCamera) return;
 
-    const wsUrl = `${WS_BASE}/ws/cameras/${selectedCamera}`;
+    const wsUrl = `${WS_BASE}/ws/cameras/${selectedCamera}?api_key=${encodeURIComponent(API_KEY)}`;
     const ws = new WebSocket(wsUrl);
     ws.binaryType = "blob";
     wsRef.current = ws;
@@ -163,10 +176,12 @@ export function CameraPanel() {
       setIsStreaming(false);
     };
 
-    // Poll last detection via REST for events metadata
-    const pollInterval = setInterval(async () => {
+    // Poll status
+    const statusInterval = setInterval(async () => {
       try {
-        const res = await fetch(`${API_BASE}/cameras/${selectedCamera}/status`);
+        const res = await fetch(`${API_BASE}/cameras/${selectedCamera}/status`, {
+          headers: authHeaders(),
+        });
         if (res.ok) {
           const data = await res.json();
           setStreamFps(data.fps || 0);
@@ -176,8 +191,41 @@ export function CameraPanel() {
       }
     }, 2000);
 
+    // Poll detections for log
+    const detectionInterval = setInterval(async () => {
+      try {
+        const res = await fetch(`${API_BASE}/cameras/${selectedCamera}/detections`, {
+          headers: authHeaders(),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.detected) {
+            setDetections((prev) => {
+              const newEvent: DetectionEvent = {
+                camera_id: data.camera_id,
+                timestamp: data.timestamp,
+                confidence: data.confidence,
+                bbox: data.bbox,
+              };
+              // Avoid duplicates within 1s
+              if (
+                prev.length > 0 &&
+                Math.abs(prev[prev.length - 1].timestamp - newEvent.timestamp) < 1
+              ) {
+                return prev;
+              }
+              return [...prev, newEvent].slice(-50);
+            });
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }, 1500);
+
     return () => {
-      clearInterval(pollInterval);
+      clearInterval(statusInterval);
+      clearInterval(detectionInterval);
       ws.close();
       wsRef.current = null;
     };
