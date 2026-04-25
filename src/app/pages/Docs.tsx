@@ -206,9 +206,10 @@ deepmcp serve --device cpu`}
                     code={`# 查看可用工具列表
 curl http://localhost:8080/tools
 
-# 测试推理
+# 测试推理（需携带 API Key）
 curl -X POST http://localhost:8080/call \\
   -H "Content-Type: application/json" \\
+  -H "X-API-Key: your-api-key-here" \\
   -d '{"tool": "yolov8_detect", "arguments": {"image": "https://example.com/img.jpg"}}'`}
                   />
                 </div>
@@ -342,8 +343,11 @@ models:
     model: "large-v3"
 
 security:
-  cors_origins: ["*"]
-  api_key: null           # Set to enable auth`}
+  cors_origins:
+    - "http://localhost:5173"
+    - "http://localhost:3000"
+    - "https://deepmcp.example.com"
+  api_key: "your-secure-api-key-here"`}
               />
             </section>
 
