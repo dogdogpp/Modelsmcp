@@ -141,6 +141,9 @@ const sampleImages = [
   },
 ];
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
+const DEFAULT_API_KEY = import.meta.env.VITE_DEEPMCP_API_KEY || "";
+
 export function Playground() {
   const [selectedModel, setSelectedModel] = useState(models[0]);
   const [imageUrl, setImageUrl] = useState("https://example.com/image.jpg");
@@ -150,37 +153,75 @@ export function Playground() {
   const [copied, setCopied] = useState(false);
   const [showModelDropdown, setShowModelDropdown] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
+  const [apiKey, setApiKey] = useState(DEFAULT_API_KEY);
 
   const handleRun = async () => {
     setIsRunning(true);
     setResult(null);
     const newLogs: string[] = [];
-    
+
     newLogs.push(`[${new Date().toLocaleTimeString()}] 初始化推理引擎...`);
     setLogs([...newLogs]);
     await new Promise((r) => setTimeout(r, 400));
-    
+
     newLogs.push(`[${new Date().toLocaleTimeString()}] 加载模型 ${selectedModel.name}...`);
     setLogs([...newLogs]);
     await new Promise((r) => setTimeout(r, 600));
-    
+
     newLogs.push(`[${new Date().toLocaleTimeString()}] 预处理输入数据...`);
     setLogs([...newLogs]);
     await new Promise((r) => setTimeout(r, 300));
-    
+
     newLogs.push(`[${new Date().toLocaleTimeString()}] 执行推理 (${selectedModel.latency})...`);
     setLogs([...newLogs]);
-    await new Promise((r) => setTimeout(r, 800));
-    
-    newLogs.push(`[${new Date().toLocaleTimeString()}] ✓ 推理完成`);
-    setLogs([...newLogs]);
-    
-    const mockResult = mockResults[selectedModel.id] || {
-      model: selectedModel.id,
-      inference_time: selectedModel.latency,
-      result: "success",
-    };
-    setResult(mockResult);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/call`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-API-Key": apiKey,
+        },
+        body: JSON.stringify({
+          tool: selectedModel.mcpTool,
+          arguments: {
+            image: imageUrl,
+            confidence: confidence,
+          },
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        newLogs.push(`[${new Date().toLocaleTimeString()}] ✓ 推理完成`);
+        setLogs([...newLogs]);
+        setResult(data);
+      } else if (response.status === 401 || response.status === 403) {
+        newLogs.push(`[${new Date().toLocaleTimeString()}] ✗ API Key 认证失败 (${response.status})`);
+        setLogs([...newLogs]);
+        const mockResult = mockResults[selectedModel.id] || {
+          model: selectedModel.id,
+          inference_time: selectedModel.latency,
+          result: "success",
+        };
+        setResult(mockResult);
+      } else {
+        throw new Error(`Server returned ${response.status}`);
+      }
+    } catch (err) {
+      newLogs.push(`[${new Date().toLocaleTimeString()}] ⚠ 后端服务不可用，切换至演示模式`);
+      setLogs([...newLogs]);
+      await new Promise((r) => setTimeout(r, 400));
+      newLogs.push(`[${new Date().toLocaleTimeString()}] ✓ 推理完成`);
+      setLogs([...newLogs]);
+      const mockResult = mockResults[selectedModel.id] || {
+        model: selectedModel.id,
+        inference_time: selectedModel.latency,
+        result: "success",
+      };
+      setResult(mockResult);
+    }
+
     setIsRunning(false);
   };
 
@@ -300,6 +341,17 @@ export function Playground() {
                     onChange={(e) => setImageUrl(e.target.value)}
                     className="w-full px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-cyan-500/30 transition-colors font-mono"
                     placeholder="https://example.com/image.jpg"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-gray-500 text-xs mb-1.5 block">API Key</label>
+                  <input
+                    type="password"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-cyan-500/30 transition-colors font-mono"
+                    placeholder="输入 X-API-Key"
                   />
                 </div>
 
