@@ -1,3 +1,5 @@
+import hmac
+
 from fastapi import FastAPI, Request, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -10,7 +12,7 @@ app.add_middleware(
     allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST"],
-    allow_headers=["*"],
+    allow_headers=["Content-Type", "X-API-Key"],
 )
 
 
@@ -23,7 +25,7 @@ def verify_api_key(request: Request):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Missing X-API-Key header",
         )
-    if api_key != DEEPMCP_API_KEY:
+    if not hmac.compare_digest(api_key, DEEPMCP_API_KEY):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Invalid API Key",
