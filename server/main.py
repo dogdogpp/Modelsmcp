@@ -18,6 +18,17 @@ from mcp.server import init_tools, get_tools, call_tool, get_health, get_metrics
 from mcp.protocol import CallRequest
 from camera import CameraManager
 
+# Optionally register real-mode model handlers (Whisper / YOLO) into server.models registry.
+# Failures (missing optional deps like `whisper` or `ultralytics`) must not crash the server.
+try:
+    import server.models.whisper_handler  # noqa: F401  (self-registers on import)
+except Exception as _e:  # pragma: no cover
+    print(f"[DeepMCP] Whisper handler not available: {_e}")
+try:
+    import server.models.yolo_handler  # noqa: F401  (self-registers on import)
+except Exception as _e:  # pragma: no cover
+    print(f"[DeepMCP] YOLO handler not available: {_e}")
+
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 

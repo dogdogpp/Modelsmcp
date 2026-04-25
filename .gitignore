@@ -1,6 +1,32 @@
+# Dependencies
 node_modules/
-dist/
 package-lock.json
+
+# Build output
+dist/
+
+# Python cache
 __pycache__/
 *.pyc
+*.pyo
+
+# Model weights (auto-downloaded)
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+
+# Logs
+*.log
+nohup.out
+
+# Env
 .env
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
