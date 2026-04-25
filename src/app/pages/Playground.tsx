@@ -11,8 +11,11 @@ import {
   Loader2,
   Terminal,
   Sparkles,
+  Camera,
+  Brain,
 } from "lucide-react";
 import { models } from "../data/models";
+import { CameraPanel } from "../components/CameraPanel";
 
 const cvImage = "https://images.unsplash.com/photo-1554936970-ce06538caf54?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjb21wdXRlciUyMHZpc2lvbiUyMG9iamVjdCUyMGRldGVjdGlvbiUyMHRlY2hub2xvZ3l8ZW58MXx8fHwxNzc0NzcxMDU4fDA&ixlib=rb-4.1.0&q=80&w=1080";
 
@@ -142,6 +145,7 @@ const sampleImages = [
 ];
 
 export function Playground() {
+  const [mode, setMode] = useState<"model" | "camera">("model");
   const [selectedModel, setSelectedModel] = useState(models[0]);
   const [imageUrl, setImageUrl] = useState("https://example.com/image.jpg");
   const [confidence, setConfidence] = useState(0.5);
@@ -231,6 +235,37 @@ export function Playground() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Mode toggle */}
+        <div className="flex items-center gap-2 mb-6">
+          <button
+            onClick={() => setMode("model")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm transition-all ${
+              mode === "model"
+                ? "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20"
+                : "text-gray-400 hover:text-white hover:bg-white/5 border border-transparent"
+            }`}
+            style={{ fontWeight: 500 }}
+          >
+            <Brain size={15} />
+            模型推理
+          </button>
+          <button
+            onClick={() => setMode("camera")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm transition-all ${
+              mode === "camera"
+                ? "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20"
+                : "text-gray-400 hover:text-white hover:bg-white/5 border border-transparent"
+            }`}
+            style={{ fontWeight: 500 }}
+          >
+            <Camera size={15} />
+            实时摄像头
+          </button>
+        </div>
+
+        {mode === "camera" ? (
+          <CameraPanel />
+        ) : (
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
           {/* Left panel - Config */}
           <div className="lg:col-span-2 space-y-5">
@@ -468,6 +503,7 @@ export function Playground() {
             )}
           </div>
         </div>
+        )}
       </div>
     </div>
   );
