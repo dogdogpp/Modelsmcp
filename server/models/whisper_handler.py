@@ -78,6 +78,7 @@ class WhisperHandler:
             "language": language if language != "auto" else None,
             "task": task,
             "verbose": False,
+            "word_timestamps": word_timestamps,
         }
 
         result = model.transcribe(audio_path, **options)

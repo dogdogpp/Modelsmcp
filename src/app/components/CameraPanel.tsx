@@ -34,15 +34,17 @@ interface DetectionEvent {
   bbox: number[];
 }
 
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8081";
+const API_BASE = import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_BASE_URL || "http://localhost:8081";
 const WS_BASE = API_BASE.replace(/^http/, "ws");
-const API_KEY = import.meta.env.VITE_API_KEY || "deepmcp-dev-key";
+// Security: no fallback default key. Empty string means dev mode (auth disabled
+// server-side); when production server requires a key, the request will fail
+// with 401 until VITE_DEEPMCP_API_KEY is provided.
+const API_KEY = import.meta.env.VITE_DEEPMCP_API_KEY || import.meta.env.VITE_API_KEY || "";
 
 function authHeaders(): Record<string, string> {
-  return {
-    "Content-Type": "application/json",
-    "X-API-Key": API_KEY,
-  };
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (API_KEY) headers["X-API-Key"] = API_KEY;
+  return headers;
 }
 
 export function CameraPanel() {
@@ -153,7 +155,9 @@ export function CameraPanel() {
   useEffect(() => {
     if (!isStreaming || !selectedCamera) return;
 
-    const wsUrl = `${WS_BASE}/ws/cameras/${selectedCamera}?api_key=${encodeURIComponent(API_KEY)}`;
+    const wsUrl = API_KEY
+      ? `${WS_BASE}/ws/cameras/${selectedCamera}?api_key=${encodeURIComponent(API_KEY)}`
+      : `${WS_BASE}/ws/cameras/${selectedCamera}`;
     const ws = new WebSocket(wsUrl);
     ws.binaryType = "blob";
     wsRef.current = ws;

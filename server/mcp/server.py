@@ -620,8 +620,47 @@ _MOCK_MODEL_STATUS = {
 # Init
 # ---------------------------------------------------------------------------
 
+def _bridge_real_handler(tool_name: str) -> Callable[[dict[str, Any]], CallResponse] | None:
+    """Look up a handler in the server.models registry and wrap it as a CallResponse-returning callable.
+
+    Returns None if the handler is unavailable (e.g. optional dep missing, not registered).
+    """
+    try:
+        from server.models import get_handler
+    except Exception:
+        return None
+    handler = get_handler(tool_name)
+    if handler is None:
+        return None
+
+    def _adapter(args: dict[str, Any]) -> CallResponse:
+        t0 = time.perf_counter()
+        try:
+            result = handler.infer(args)
+        except Exception as e:
+            return CallResponse(
+                status="error",
+                model=getattr(handler, "model_id", tool_name),
+                inference_time="0ms",
+                device=getattr(handler, "device", "cpu"),
+                result=None,
+                error={"code": "INFERENCE_ERROR", "message": str(e)},
+            )
+        elapsed_ms = round((time.perf_counter() - t0) * 1000, 1)
+        return CallResponse(
+            status="success",
+            model=getattr(handler, "model_id", tool_name),
+            inference_time=f"{elapsed_ms}ms",
+            device=getattr(handler, "device", "cpu"),
+            result=result,
+        )
+
+    return _adapter
+
+
 def init_tools(mock_mode: bool = False, camera_manager=None) -> None:
-    """Register tool handlers. In non-mock mode, yolo26 uses real inference."""
+    """Register tool handlers. In non-mock mode, real handlers from server.models are
+    bridged where available; tools without a real implementation fall back to mock."""
     global _CAMERA_MANAGER
     _CAMERA_MANAGER = camera_manager
     if mock_mode:
@@ -634,7 +673,17 @@ def init_tools(mock_mode: bool = False, camera_manager=None) -> None:
     register_tool(_MOCK_TOOL_SCHEMAS[2], _mock_paddleocr)
     register_tool(_MOCK_TOOL_SCHEMAS[3], _mock_sam2)
     register_tool(_MOCK_TOOL_SCHEMAS[4], _mock_clip)
-    register_tool(_MOCK_TOOL_SCHEMAS[5], _mock_whisper)
+
+    # Bridge real Whisper handler when available in non-mock mode.
+    whisper_handler = None if mock_mode else _bridge_real_handler("whisper_transcribe")
+    if whisper_handler is not None:
+        register_tool(_MOCK_TOOL_SCHEMAS[5], whisper_handler)
+        print("[DeepMCP] Registered REAL whisper handler")
+    else:
+        register_tool(_MOCK_TOOL_SCHEMAS[5], _mock_whisper)
+        if not mock_mode:
+            print("[DeepMCP] WARNING: real whisper handler unavailable; falling back to mock")
+
     register_tool(_MOCK_TOOL_SCHEMAS[6], _mock_depth)
     register_tool(_MOCK_TOOL_SCHEMAS[7], _mock_dinov2)
     register_tool(_MOCK_TOOL_SCHEMAS[8], _mock_pose)
