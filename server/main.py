@@ -1,7 +1,17 @@
 """DeepMCP FastAPI Server entry point."""
 
+import sys
+from pathlib import Path
+
+# Fix: Ensure project root is on sys.path so `import server.xxx` works when
+# running `python main.py` directly inside the `server/` directory.
+_project_root = Path(__file__).resolve().parent.parent
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
+
 import asyncio
 import hmac
+import socket
 import time
 from contextlib import asynccontextmanager
 
@@ -53,9 +63,12 @@ async def lifespan(app: FastAPI):
         camera_manager = CameraManager(yolo_model)
         # Auto-start configured cameras
         available = camera_manager.discover_cameras()
-        for cam in available:
-            camera_manager.start_camera(cam["id"], cam["source"])
-        print(f"[DeepMCP] Camera manager initialized. Auto-started {len(available)} camera(s).")
+        if available:
+            for cam in available:
+                camera_manager.start_camera(cam["id"], cam["source"])
+            print(f"[DeepMCP] Camera manager initialized. Auto-started {len(available)} camera(s).")
+        else:
+            print("[DeepMCP] No cameras detected; camera manager initialized but idle.")
     init_tools(MOCK_MODE, camera_manager)
     app.state.camera_manager = camera_manager
     print("[DeepMCP] Server started. Mock mode:", MOCK_MODE)
@@ -236,6 +249,19 @@ async def camera_websocket(websocket: WebSocket, camera_id: str):
         pass
 
 
+def _find_available_port(preferred: int, max_tries: int = 10) -> int:
+    """Return the preferred port if free, otherwise scan upwards."""
+    for offset in range(max_tries):
+        port = preferred + offset
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            if s.connect_ex((HOST, port)) != 0:
+                if offset > 0:
+                    print(f"[DeepMCP] Port {preferred} in use, falling back to {port}.")
+                return port
+    raise RuntimeError(f"No free port found in range {preferred}..{preferred + max_tries - 1}")
+
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host=HOST, port=PORT, reload=False)
+    actual_port = _find_available_port(PORT)
+    uvicorn.run("main:app", host=HOST, port=actual_port, reload=False)

@@ -14,6 +14,9 @@ from PIL import Image
 
 import config
 
+# Suppress noisy OpenCV warnings when no camera device is present.
+cv2.utils.logging.setLogLevel(cv2.utils.logging.LOG_LEVEL_ERROR)
+
 
 def _encode_frame_to_jpeg(frame: np.ndarray, quality: int = 85) -> bytes:
     """Encode OpenCV BGR frame to JPEG bytes."""
