@@ -174,10 +174,27 @@ async function callRealApi(request: object, apiKey: string): Promise<object> {
     body: JSON.stringify(request),
   });
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail || `HTTP ${res.status}`);
+    const errData = await res.json().catch(() => ({ detail: res.statusText }));
+    const detail =
+      typeof errData.detail === "string"
+        ? errData.detail
+        : JSON.stringify(errData.detail || errData);
+    throw new Error(detail || `HTTP ${res.status}`);
   }
   return res.json();
+}
+
+function isNetworkError(msg: string): boolean {
+  const networkPatterns = [
+    "Failed to fetch",
+    "NetworkError",
+    "ECONNREFUSED",
+    "net::ERR",
+    "Network request failed",
+    "fetch failed",
+    "Load failed",
+  ];
+  return networkPatterns.some((p) => msg.includes(p));
 }
 
 export function Playground() {
@@ -192,7 +209,7 @@ export function Playground() {
   const [useMockFallback, setUseMockFallback] = useState(false);
 
   // Dynamic inputs
-  const [imageUrl, setImageUrl] = useState("https://example.com/image.jpg");
+  const [imageUrl, setImageUrl] = useState("");
   const [confidence, setConfidence] = useState(0.5);
   const [audioUrl, setAudioUrl] = useState(sampleAudio);
   const [language, setLanguage] = useState("zh");
@@ -209,7 +226,7 @@ export function Playground() {
     setResult(null);
     setLogs([]);
     setUseMockFallback(false);
-    setImageUrl("https://example.com/image.jpg");
+    setImageUrl("");
     setConfidence(0.5);
     setAudioUrl(sampleAudio);
     setLanguage("zh");
@@ -282,6 +299,18 @@ export function Playground() {
       setLogs([...newLogs]);
     };
 
+    // Input validation: block empty required inputs before calling API
+    if ((primaryInput === "image" || primaryInput === "mixed") && !imageUrl.trim()) {
+      pushLog("✗ 请先输入图片 URL 或选择示例图片");
+      setIsRunning(false);
+      return;
+    }
+    if (primaryInput === "audio" && !audioUrl.trim()) {
+      pushLog("✗ 请先输入音频 URL");
+      setIsRunning(false);
+      return;
+    }
+
     pushLog("初始化推理引擎...");
     await new Promise((r) => setTimeout(r, 300));
 
@@ -303,18 +332,20 @@ export function Playground() {
       const msg = err?.message || String(err);
       if (msg.includes("401") || msg.includes("403") || /API Key/i.test(msg)) {
         pushLog(`✗ API Key 认证失败: ${msg}`);
-      } else {
+      } else if (isNetworkError(msg)) {
         pushLog(`⚠ 后端不可用: ${msg}`);
+        pushLog("回退到 Mock 数据...");
+        setUseMockFallback(true);
+        await new Promise((r) => setTimeout(r, 400));
+        apiResult = mockResults[selectedModel.id] || {
+          model: selectedModel.id,
+          inference_time: selectedModel.latency,
+          result: "success",
+        };
+        pushLog("✓ 推理完成 (Mock)");
+      } else {
+        pushLog(`✗ 推理失败: ${msg}`);
       }
-      pushLog("回退到 Mock 数据...");
-      setUseMockFallback(true);
-      await new Promise((r) => setTimeout(r, 400));
-      apiResult = mockResults[selectedModel.id] || {
-        model: selectedModel.id,
-        inference_time: selectedModel.latency,
-        result: "success",
-      };
-      pushLog("✓ 推理完成 (Mock)");
     }
 
     setResult(apiResult);
@@ -333,7 +364,7 @@ export function Playground() {
     setResult(null);
     setLogs([]);
     setUseMockFallback(false);
-    setImageUrl("https://example.com/image.jpg");
+    setImageUrl("");
     setConfidence(0.5);
     setAudioUrl(sampleAudio);
     setLanguage("zh");
@@ -685,11 +716,23 @@ export function Playground() {
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="rounded-2xl border border-white/5 bg-[#0d1117] overflow-hidden"
+                className={`rounded-2xl border overflow-hidden ${
+                  useMockFallback
+                    ? "border-amber-500/40 bg-amber-950/10"
+                    : "border-white/5 bg-[#0d1117]"
+                }`}
               >
+                {useMockFallback && (
+                  <div className="px-4 py-2 border-b border-amber-500/20 bg-amber-500/10 flex items-center gap-2">
+                    <AlertCircle size={14} className="text-amber-400 shrink-0" />
+                    <span className="text-amber-300 text-xs" style={{ fontWeight: 600 }}>
+                      当前展示的是 Mock 数据，真实后端不可用或请求失败
+                    </span>
+                  </div>
+                )}
                 <div className="flex items-center justify-between px-4 py-3 border-b border-white/5 bg-white/[0.02]">
                   <div className="flex items-center gap-2">
-                    <CheckCircle size={13} className="text-green-400" />
+                    <CheckCircle size={13} className={useMockFallback ? "text-amber-400" : "text-green-400"} />
                     <span className="text-gray-400 text-xs" style={{ fontWeight: 500 }}>推理结果</span>
                     {useMockFallback && (
                       <span className="text-amber-400 text-xs px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20">Mock</span>
