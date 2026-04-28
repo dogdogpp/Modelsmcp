@@ -1,4 +1,4 @@
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState } from "react";
 
 interface Detection {
   class?: string;
@@ -24,8 +24,10 @@ const COLORS = [
 
 export function DetectionOverlay({ imageSrc, detections, maxWidth = 640 }: DetectionOverlayProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    setError(null);
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
@@ -90,8 +92,28 @@ export function DetectionOverlay({ imageSrc, detections, maxWidth = 640 }: Detec
         ctx.fillText(labelText, x1 + pad, y1 - pad - 2);
       });
     };
+    img.onerror = () => {
+      setError("图片加载失败，无法绘制检测框");
+      // Draw a small error placeholder on canvas
+      canvas.width = maxWidth;
+      canvas.height = 120;
+      ctx.fillStyle = "#1a1a1a";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "#ef4444";
+      ctx.font = "14px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("图片加载失败", canvas.width / 2, canvas.height / 2);
+    };
     img.src = imageSrc;
   }, [imageSrc, detections, maxWidth]);
+
+  if (error) {
+    return (
+      <div className="rounded-xl overflow-hidden border border-red-500/30 bg-red-950/10 px-4 py-3 text-red-400 text-xs">
+        {error}
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-xl overflow-hidden border border-white/10 bg-black">

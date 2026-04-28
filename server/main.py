@@ -116,6 +116,10 @@ def call(request: CallRequest):
     return response
 
 
+# Security: Limit uploaded file size to prevent OOM (16 MB).
+_MAX_UPLOAD_SIZE = 16 * 1024 * 1024
+
+
 @app.post("/upload", dependencies=[Depends(verify_api_key)])
 async def upload(
     tool: str = Form(...),
@@ -125,12 +129,25 @@ async def upload(
     """Upload a file and run inference. The file is converted to base64 and passed
 to the specified tool as the 'image' or 'audio' argument."""
     contents = await file.read()
+    if len(contents) > _MAX_UPLOAD_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail={"code": "FILE_TOO_LARGE", "message": f"File exceeds {_MAX_UPLOAD_SIZE // (1024 * 1024)} MB limit"},
+        )
+
     # Determine MIME type; fallback to generic binary if unknown
     mime = file.content_type or "application/octet-stream"
     b64 = base64.b64encode(contents).decode("utf-8")
     data_uri = f"data:{mime};base64,{b64}"
 
-    args: dict = json.loads(arguments)
+    try:
+        args: dict = json.loads(arguments) if arguments else {}
+    except json.JSONDecodeError:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "INVALID_JSON", "message": "arguments must be valid JSON"},
+        )
+
     # Auto-detect whether this is an image or audio upload based on MIME type
     if mime.startswith("image/"):
         args["image"] = data_uri
