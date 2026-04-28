@@ -125,6 +125,7 @@ class CameraStream:
         self._cap = cv2.VideoCapture(self.source)
         if not self._cap.isOpened():
             self._status = "error"
+            print(f"[Camera {self.camera_id}] Failed to open source {self.source}")
             return
 
         # Try to set buffer size low for latency
@@ -134,12 +135,21 @@ class CameraStream:
         last_inference = 0.0
         frame_count = 0
         t0 = time.time()
+        read_failures = 0
 
         while not self._stop_event.is_set():
             success, frame = self._cap.read()
             if not success:
+                read_failures += 1
+                if read_failures % 100 == 1:
+                    print(f"[Camera {self.camera_id}] Frame read failed ({read_failures} times)")
+                if read_failures > 500:
+                    self._status = "error"
+                    print(f"[Camera {self.camera_id}] Stream broken after {read_failures} read failures")
+                    break
                 time.sleep(0.01)
                 continue
+            read_failures = 0
 
             frame_count += 1
             elapsed = time.time() - t0
@@ -156,26 +166,29 @@ class CameraStream:
 
             if now - last_inference >= self.inference_interval and self.yolo_model is not None:
                 last_inference = now
-                results = self.yolo_model(frame, conf=self.confidence, verbose=False, classes=[0])
-                boxes = results[0].boxes
-                if boxes is not None and len(boxes) > 0:
-                    names = self.yolo_model.names
-                    for i in range(len(boxes)):
-                        cls_id = int(boxes.cls[i].item())
-                        cls_name = names.get(cls_id, str(cls_id))
-                        conf = float(boxes.conf[i].item())
-                        if cls_name == "person":
-                            person_detected = True
-                            if conf > best_conf:
-                                best_conf = conf
-                                best_bbox = [round(float(v), 2) for v in boxes.xyxy[i].tolist()]
-                            x1, y1, x2, y2 = map(int, boxes.xyxy[i].tolist())
-                            cv2.rectangle(annotated, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                            label = f"person {conf:.2f}"
-                            cv2.putText(
-                                annotated, label, (x1, max(y1 - 10, 20)),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2,
-                            )
+                try:
+                    results = self.yolo_model(frame, conf=self.confidence, verbose=False, classes=[0])
+                    boxes = results[0].boxes
+                    if boxes is not None and len(boxes) > 0:
+                        names = self.yolo_model.names
+                        for i in range(len(boxes)):
+                            cls_id = int(boxes.cls[i].item())
+                            cls_name = names.get(cls_id, str(cls_id))
+                            conf = float(boxes.conf[i].item())
+                            if cls_name == "person":
+                                person_detected = True
+                                if conf > best_conf:
+                                    best_conf = conf
+                                    best_bbox = [round(float(v), 2) for v in boxes.xyxy[i].tolist()]
+                                x1, y1, x2, y2 = map(int, boxes.xyxy[i].tolist())
+                                cv2.rectangle(annotated, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                                label = f"person {conf:.2f}"
+                                cv2.putText(
+                                    annotated, label, (x1, max(y1 - 10, 20)),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2,
+                                )
+                except Exception as e:
+                    print(f"[Camera {self.camera_id}] Inference error: {e}")
 
             with self._lock:
                 self._latest_frame = frame
@@ -274,6 +287,7 @@ class CameraManager:
                     "source": s.source,
                     "status": s.status,
                     "fps": round(s.fps, 1),
+                    "thread_alive": s._thread is not None and s._thread.is_alive(),
                 }
                 for s in self._streams.values()
             ]

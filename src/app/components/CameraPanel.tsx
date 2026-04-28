@@ -62,6 +62,7 @@ export function CameraPanel() {
   const imgRef = useRef<HTMLImageElement | null>(null);
   const frameCountRef = useRef(0);
   const lastFpsTimeRef = useRef(Date.now());
+  const lastFrameTimeRef = useRef<number | null>(null);
 
   const fetchCameras = useCallback(async () => {
     try {
@@ -103,11 +104,14 @@ export function CameraPanel() {
 
       frameCountRef.current += 1;
       const now = Date.now();
+      lastFrameTimeRef.current = now;
       if (now - lastFpsTimeRef.current >= 1000) {
         setStreamFps(frameCountRef.current);
         frameCountRef.current = 0;
         lastFpsTimeRef.current = now;
       }
+      // Clear starvation warning once frames resume
+      setError((prev) => (prev === "摄像头无信号（超过3秒未收到帧）" ? null : prev));
     };
     img.src = url;
   }, []);
@@ -116,6 +120,7 @@ export function CameraPanel() {
     if (!selectedCamera) return;
     setIsLoading(true);
     setError(null);
+    lastFrameTimeRef.current = null;
 
     try {
       const res = await fetch(`${API_BASE}/cameras/${selectedCamera}/start`, {
@@ -189,9 +194,22 @@ export function CameraPanel() {
         if (res.ok) {
           const data = await res.json();
           setStreamFps(data.fps || 0);
+          if (data.thread_alive === false) {
+            setError("摄像头采集线程已停止");
+            setIsStreaming(false);
+          }
         }
       } catch {
         // ignore
+      }
+
+      // Frame starvation detection: warn if no frame received for 3s while streaming
+      const now = Date.now();
+      if (
+        lastFrameTimeRef.current !== null &&
+        now - lastFrameTimeRef.current > 3000
+      ) {
+        setError("摄像头无信号（超过3秒未收到帧）");
       }
     }, 2000);
 
