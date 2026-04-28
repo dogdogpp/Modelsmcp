@@ -18,9 +18,11 @@ WORKERS = int(os.getenv("DEEPMCP_WORKERS", "1"))
 API_KEY = os.getenv("DEEPMCP_API_KEY", "")
 
 # Security: CORS origins read from env var with restrictive defaults.
+# Includes common Vite dev-server ports (5173-5180) to avoid preflight failures
+# when the port auto-increments due to conflicts.
 CORS_ORIGINS = os.getenv(
     "DEEPMCP_CORS_ORIGINS",
-    "http://localhost:5173,http://localhost:5174,http://localhost:3000",
+    ",".join([f"http://localhost:{p}" for p in range(5173, 5181)] + ["http://localhost:3000"]),
 ).split(",")
 
 MOCK_MODE = os.getenv("DEEPMCP_MOCK_MODE", "false").lower() == "true"
