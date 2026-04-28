@@ -15,7 +15,10 @@ import socket
 import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Depends, Security, WebSocket, WebSocketDisconnect, Query
+import base64
+import json
+
+from fastapi import FastAPI, File, Form, HTTPException, Depends, Security, UploadFile, WebSocket, WebSocketDisconnect, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.security.api_key import APIKeyHeader
@@ -107,6 +110,37 @@ def tools():
 
 @app.post("/call", dependencies=[Depends(verify_api_key)])
 def call(request: CallRequest):
+    response = call_tool(request)
+    if response.status == "error":
+        raise HTTPException(status_code=400, detail=response.error)
+    return response
+
+
+@app.post("/upload", dependencies=[Depends(verify_api_key)])
+async def upload(
+    tool: str = Form(...),
+    file: UploadFile = File(...),
+    arguments: str = Form("{}"),
+):
+    """Upload a file and run inference. The file is converted to base64 and passed
+to the specified tool as the 'image' or 'audio' argument."""
+    contents = await file.read()
+    # Determine MIME type; fallback to generic binary if unknown
+    mime = file.content_type or "application/octet-stream"
+    b64 = base64.b64encode(contents).decode("utf-8")
+    data_uri = f"data:{mime};base64,{b64}"
+
+    args: dict = json.loads(arguments)
+    # Auto-detect whether this is an image or audio upload based on MIME type
+    if mime.startswith("image/"):
+        args["image"] = data_uri
+    elif mime.startswith("audio/"):
+        args["audio"] = data_uri
+    else:
+        # Default to image for backward compatibility
+        args["image"] = data_uri
+
+    request = CallRequest(tool=tool, arguments=args)
     response = call_tool(request)
     if response.status == "error":
         raise HTTPException(status_code=400, detail=response.error)

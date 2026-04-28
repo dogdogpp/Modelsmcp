@@ -16,9 +16,11 @@ import {
   Camera,
   Brain,
   AlertCircle,
+  FileUp,
 } from "lucide-react";
 import { models } from "../data/models";
 import { CameraPanel } from "../components/CameraPanel";
+import { DetectionOverlay } from "../components/DetectionOverlay";
 
 const cvImage = "https://images.unsplash.com/photo-1554936970-ce06538caf54?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjb21wdXRlciUyMHZpc2lvbiUyMG9iamVjdCUyMGRldGVjdGlvbiUyMHRlY2hub2xvZ3l8ZW58MXx8fHwxNzc0NzcxMDU4fDA&ixlib=rb-4.1.0&q=80&w=1080";
 
@@ -210,6 +212,7 @@ export function Playground() {
 
   // Dynamic inputs
   const [imageUrl, setImageUrl] = useState("");
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [confidence, setConfidence] = useState(0.5);
   const [audioUrl, setAudioUrl] = useState(sampleAudio);
   const [language, setLanguage] = useState("zh");
@@ -221,12 +224,25 @@ export function Playground() {
 
   const primaryInput = getPrimaryInputType(selectedModel.inputType);
 
+  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      setImageUrl(dataUrl);
+      setImagePreview(dataUrl);
+    };
+    reader.readAsDataURL(file);
+  };
+
   // Reset inputs when model changes
   useEffect(() => {
     setResult(null);
     setLogs([]);
     setUseMockFallback(false);
     setImageUrl("");
+    setImagePreview(null);
     setConfidence(0.5);
     setAudioUrl(sampleAudio);
     setLanguage("zh");
@@ -365,6 +381,7 @@ export function Playground() {
     setLogs([]);
     setUseMockFallback(false);
     setImageUrl("");
+    setImagePreview(null);
     setConfidence(0.5);
     setAudioUrl(sampleAudio);
     setLanguage("zh");
@@ -498,17 +515,36 @@ export function Playground() {
 
                 {/* Image input */}
                 {(primaryInput === "image" || primaryInput === "mixed") && (
-                  <div>
-                    <label className="text-gray-500 text-xs mb-1.5 block flex items-center gap-1">
-                      <ImageIcon size={12} /> 图片 URL
-                    </label>
-                    <input
-                      type="text"
-                      value={imageUrl}
-                      onChange={(e) => setImageUrl(e.target.value)}
-                      className="w-full px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-cyan-500/30 transition-colors font-mono"
-                      placeholder="https://example.com/image.jpg"
-                    />
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-gray-500 text-xs mb-1.5 block flex items-center gap-1">
+                        <ImageIcon size={12} /> 图片 URL 或本地上传
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={imageUrl}
+                          onChange={(e) => { setImageUrl(e.target.value); setImagePreview(e.target.value || null); }}
+                          className="flex-1 px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-cyan-500/30 transition-colors font-mono"
+                          placeholder="https://example.com/image.jpg"
+                        />
+                        <label className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-gray-300 text-sm hover:bg-white/[0.07] hover:text-white transition-colors cursor-pointer shrink-0">
+                          <FileUp size={14} />
+                          <span>上传</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleImageFileChange}
+                            className="hidden"
+                          />
+                        </label>
+                      </div>
+                    </div>
+                    {imagePreview && (
+                      <div className="rounded-lg overflow-hidden border border-white/10 bg-black max-h-40">
+                        <img src={imagePreview} alt="Preview" className="w-full h-full object-contain max-h-40" />
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -749,8 +785,27 @@ export function Playground() {
                     )}
                   </button>
                 </div>
-                <div className="p-4 max-h-80 overflow-y-auto">
-                  <pre className="text-xs font-mono text-gray-300 leading-relaxed whitespace-pre-wrap">
+                <div className="p-4 space-y-4">
+                  {/* Detection visualization */}
+                  {(() => {
+                    const res = result as Record<string, unknown>;
+                    const detections =
+                      (res.result as Record<string, unknown> | undefined)?.detections ||
+                      (res.result as Record<string, unknown> | undefined)?.persons ||
+                      (res as Record<string, unknown>).detections;
+                    const hasDetections = Array.isArray(detections) && detections.length > 0;
+                    const imgSrc = imagePreview || imageUrl;
+                    if (hasDetections && imgSrc) {
+                      return (
+                        <DetectionOverlay
+                          imageSrc={imgSrc}
+                          detections={detections as Array<Record<string, unknown>>}
+                        />
+                      );
+                    }
+                    return null;
+                  })()}
+                  <pre className="text-xs font-mono text-gray-300 leading-relaxed whitespace-pre-wrap max-h-80 overflow-y-auto">
                     {JSON.stringify(result, null, 2)
                       .split("\n")
                       .map((line, i) => {
