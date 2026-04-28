@@ -224,6 +224,13 @@ export function Playground() {
   const [clipMode, setClipMode] = useState<"classify" | "encode">("classify");
   const [selectedClasses, setSelectedClasses] = useState<string[]>([]);
 
+  // Microphone recording state
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const primaryInput = getPrimaryInputType(selectedModel.inputType);
 
   const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -236,6 +243,63 @@ export function Playground() {
       setImagePreview(dataUrl);
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleAudioFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      setAudioUrl(dataUrl);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        const reader = new FileReader();
+        reader.onload = () => {
+          const dataUrl = reader.result as string;
+          setAudioUrl(dataUrl);
+        };
+        reader.readAsDataURL(audioBlob);
+        stream.getTracks().forEach((track) => track.stop());
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      setRecordingTime(0);
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingTime((t) => t + 1);
+      }, 1000);
+    } catch (err) {
+      alert("无法访问麦克风，请检查权限设置: " + String(err));
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
+    }
+    setIsRecording(false);
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
   };
 
   // Reset inputs when model changes
@@ -397,6 +461,12 @@ export function Playground() {
     setClipTexts("a cat\na dog\na bird");
     setClipMode("classify");
     setSelectedClasses([]);
+    setIsRecording(false);
+    setRecordingTime(0);
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
   };
 
   return (
@@ -560,15 +630,41 @@ export function Playground() {
                   <>
                     <div>
                       <label className="text-gray-500 text-xs mb-1.5 block flex items-center gap-1">
-                        <Mic size={12} /> 音频 URL
+                        <Mic size={12} /> 音频来源
                       </label>
-                      <input
-                        type="text"
-                        value={audioUrl}
-                        onChange={(e) => setAudioUrl(e.target.value)}
-                        className="w-full px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-cyan-500/30 transition-colors font-mono"
-                        placeholder="https://example.com/audio.mp3"
-                      />
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={audioUrl}
+                          onChange={(e) => setAudioUrl(e.target.value)}
+                          className="flex-1 px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-cyan-500/30 transition-colors font-mono"
+                          placeholder="https://example.com/audio.mp3"
+                        />
+                        <label className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-gray-300 text-sm hover:bg-white/[0.07] hover:text-white transition-colors cursor-pointer shrink-0">
+                          <FileUp size={14} />
+                          <span>上传</span>
+                          <input
+                            type="file"
+                            accept="audio/*"
+                            onChange={handleAudioFileChange}
+                            className="hidden"
+                          />
+                        </label>
+                        <button
+                          onClick={isRecording ? stopRecording : startRecording}
+                          className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm transition-colors shrink-0 ${
+                            isRecording
+                              ? "border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20"
+                              : "border-white/10 bg-white/5 text-gray-300 hover:bg-white/[0.07] hover:text-white"
+                          }`}
+                        >
+                          <Mic size={14} className={isRecording ? "animate-pulse" : ""} />
+                          <span>{isRecording ? `停止 (${recordingTime}s)` : "录制"}</span>
+                        </button>
+                      </div>
+                      {audioUrl && audioUrl.startsWith("data:") && (
+                        <audio src={audioUrl} controls className="w-full mt-2 rounded-lg" />
+                      )}
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
