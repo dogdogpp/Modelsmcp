@@ -25,7 +25,7 @@ const sections = [
 ];
 
 const tools = [
-  { name: "yolov8_detect", desc: "YOLOv8 目标检测", params: ["image", "confidence", "classes", "model_size"] },
+  { name: "yolo26_detect", desc: "YOLO2026 目标检测", params: ["image", "confidence", "classes", "model_size"] },
   { name: "detr_detect", desc: "DETR Transformer 检测", params: ["image", "threshold", "return_masks"] },
   { name: "paddleocr_recognize", desc: "PaddleOCR 文字识别", params: ["image", "lang", "use_angle_cls", "det", "rec"] },
   { name: "sam2_segment", desc: "SAM 2 图像/视频分割", params: ["image", "prompts", "multimask_output"] },
@@ -186,7 +186,7 @@ pipx install deepmcp`}
 deepmcp pull --all
 
 # 下载单个模型
-deepmcp pull yolov8 paddleocr
+deepmcp pull yolo26 paddleocr
 
 # 启动 MCP 服务（默认端口 8080）
 deepmcp serve --gpu
@@ -210,7 +210,7 @@ curl http://localhost:8080/tools
 curl -X POST http://localhost:8080/call \\
   -H "Content-Type: application/json" \\
   -H "X-API-Key: your-api-key-here" \\
-  -d '{"tool": "yolov8_detect", "arguments": {"image": "https://example.com/img.jpg"}}'`}
+  -d '{"tool": "yolo26_detect", "arguments": {"image": "https://example.com/img.jpg"}}'`}
                   />
                 </div>
               </div>
@@ -253,7 +253,7 @@ curl -X POST http://localhost:8080/call \\
 Content-Type: application/json
 
 {
-  "tool": "yolov8_detect",
+  "tool": "yolo26_detect",
   "arguments": {
     "image": "https://example.com/photo.jpg",
     "confidence": 0.5,
@@ -269,7 +269,7 @@ Content-Type: application/json
                 lang="json"
                 code={`{
   "status": "success",
-  "model": "yolov8",
+  "model": "yolo26",
   "inference_time": "12ms",
   "device": "CUDA",
   "result": {
@@ -328,9 +328,9 @@ inference:
   timeout: 30s
 
 models:
-  yolov8:
+  yolo26:
     enabled: true
-    variant: "yolov8m"    # n/s/m/l/x
+    variant: "yolo26n"    # n/s/m/l/x
     weights: "auto"       # auto download or local path
   paddleocr:
     enabled: true
@@ -369,7 +369,7 @@ security:
       "command": "deepmcp",
       "args": ["serve", "--port", "8080", "--device", "cuda"],
       "env": {
-        "DEEPMCP_MODELS": "yolov8,paddleocr,sam2,whisper"
+        "DEEPMCP_MODELS": "yolo26,paddleocr,sam2,whisper"
       }
     }
   }
@@ -392,7 +392,7 @@ mcp_servers:
     transport: "http"
     url: "http://localhost:8080/mcp"
     tools:
-      - yolov8_detect
+      - yolo26_detect
       - paddleocr_recognize
       - sam2_segment
       - whisper_transcribe

@@ -14,10 +14,10 @@ from . import register
 
 
 class YOLOHandler:
-    name = "YOLOv8"
-    tool = "yolov8_detect"
-    model_id = "yolov8"
-    description = "YOLOv8 目标检测"
+    name = "YOLO2026"
+    tool = "yolo26_detect"
+    model_id = "yolo26"
+    description = "YOLO2026 目标检测"
     device = "CPU"
     parameters = {
         "type": "object",
@@ -39,13 +39,13 @@ class YOLOHandler:
             return self._model
 
         weights_dir = os.path.join(os.path.dirname(__file__), "..", "..", "yolo2026")
-        weights_path = os.path.join(weights_dir, f"yolov8{size}.pt")
+        weights_path = os.path.join(weights_dir, f"yolo26{size}.pt")
 
         if os.path.exists(weights_path):
             self._model = YOLO(weights_path)
         else:
             # Auto-download via ultralytics
-            self._model = YOLO(f"yolov8{size}.pt")
+            self._model = YOLO(f"yolo26{size}.pt")
             # Save to local weights dir for reuse
             if not os.path.exists(weights_dir):
                 os.makedirs(weights_dir, exist_ok=True)

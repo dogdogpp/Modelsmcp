@@ -22,10 +22,10 @@ export default defineConfig({
 
   server: {
     proxy: {
-      '/call': 'http://localhost:18080',
-      '/tools': 'http://localhost:18080',
-      '/health': 'http://localhost:18080',
-      '/metrics': 'http://localhost:18080',
+      '/call': 'http://localhost:8081',
+      '/tools': 'http://localhost:8081',
+      '/health': 'http://localhost:8081',
+      '/metrics': 'http://localhost:8081',
     },
   },
 })

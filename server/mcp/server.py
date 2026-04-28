@@ -83,7 +83,7 @@ def _decode_image(image_input: str) -> Image.Image:
     return Image.open(io.BytesIO(image_bytes)).convert("RGB")
 
 
-def _load_yolo_model(variant: str = "yolov8n"):
+def _load_yolo_model(variant: str = "yolo26n"):
     """Lazily load a YOLO model (auto-downloads weights on first use)."""
     global _YOLO_MODEL
     if _YOLO_MODEL is None:

@@ -3,7 +3,7 @@ from ultralytics import YOLO
 import cv2
 
 # 加载预训练的 YOLOv8 模型
-model = YOLO('yolov8n.pt')  # 使用小型的 YOLOv8n 模型
+model = YOLO('yolo26n.pt')  # 使用小型的 yolo26n 模型
 
 def infer(image_path, output_path):
     # 对图像进行推理

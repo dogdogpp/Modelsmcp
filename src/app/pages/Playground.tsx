@@ -26,8 +26,8 @@ const cvImage = "https://images.unsplash.com/photo-1554936970-ce06538caf54?crop=
 
 // Mock inference results per model
 const mockResults: Record<string, object> = {
-  yolov8: {
-    model: "yolov8",
+  yolo26: {
+    model: "yolo26",
     inference_time: "12ms",
     device: "CUDA (RTX 4090)",
     detections: [
@@ -143,7 +143,7 @@ const sampleImages = [
   { label: "办公室", url: cvImage },
 ];
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8081";
 const DEFAULT_API_KEY = import.meta.env.VITE_DEEPMCP_API_KEY || "";
 
 const sampleAudio = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3";
@@ -258,7 +258,7 @@ export function Playground() {
     if (primaryInput === "image" || primaryInput === "mixed") {
       base.image = imageUrl;
     }
-    if (selectedModel.id === "yolov8" || selectedModel.id === "yolov8-pose" || selectedModel.id === "grounding-dino") {
+    if (selectedModel.id === "yolo26" || selectedModel.id === "yolov8-pose" || selectedModel.id === "grounding-dino") {
       base.confidence = confidence;
     }
     if (selectedModel.id === "detr") {
@@ -631,7 +631,7 @@ export function Playground() {
                 )}
 
                 {/* Confidence slider for detection models */}
-                {(selectedModel.id === "yolov8" || selectedModel.id === "yolov8-pose" || selectedModel.id === "detr" || selectedModel.id === "grounding-dino") && (
+                {(selectedModel.id === "yolo26" || selectedModel.id === "yolov8-pose" || selectedModel.id === "detr" || selectedModel.id === "grounding-dino") && (
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
                       <label className="text-gray-500 text-xs">置信度阈值</label>
