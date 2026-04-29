@@ -41,6 +41,7 @@ class DetectionEvent:
     confidence: float
     screenshot_b64: str
     bbox: list[float]
+    class_name: str = ""
 
 
 class CameraStream:
@@ -54,6 +55,7 @@ class CameraStream:
         confidence: float = 0.5,
         inference_interval: float = 0.2,
         webhook_cooldown: float = 5.0,
+        classes: list[str] | None = None,
     ) -> None:
         self.camera_id = camera_id
         self.source = int(source) if str(source).isdigit() else source
@@ -61,6 +63,7 @@ class CameraStream:
         self.confidence = confidence
         self.inference_interval = inference_interval
         self.webhook_cooldown = webhook_cooldown
+        self.classes = classes
 
         self._cap: cv2.VideoCapture | None = None
         self._thread: threading.Thread | None = None
@@ -163,11 +166,12 @@ class CameraStream:
             person_detected = False
             best_conf = 0.0
             best_bbox = []
+            best_class = ""
 
             if now - last_inference >= self.inference_interval and self.yolo_model is not None:
                 last_inference = now
                 try:
-                    results = self.yolo_model(frame, conf=self.confidence, verbose=False, classes=[0])
+                    results = self.yolo_model(frame, conf=self.confidence, verbose=False)
                     boxes = results[0].boxes
                     if boxes is not None and len(boxes) > 0:
                         names = self.yolo_model.names
@@ -175,18 +179,20 @@ class CameraStream:
                             cls_id = int(boxes.cls[i].item())
                             cls_name = names.get(cls_id, str(cls_id))
                             conf = float(boxes.conf[i].item())
-                            if cls_name == "person":
-                                person_detected = True
-                                if conf > best_conf:
-                                    best_conf = conf
-                                    best_bbox = [round(float(v), 2) for v in boxes.xyxy[i].tolist()]
-                                x1, y1, x2, y2 = map(int, boxes.xyxy[i].tolist())
-                                cv2.rectangle(annotated, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                                label = f"person {conf:.2f}"
-                                cv2.putText(
-                                    annotated, label, (x1, max(y1 - 10, 20)),
-                                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2,
-                                )
+                            if self.classes and cls_name not in self.classes:
+                                continue
+                            person_detected = True
+                            if conf > best_conf:
+                                best_conf = conf
+                                best_bbox = [round(float(v), 2) for v in boxes.xyxy[i].tolist()]
+                                best_class = cls_name
+                            x1, y1, x2, y2 = map(int, boxes.xyxy[i].tolist())
+                            cv2.rectangle(annotated, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                            label = f"{cls_name} {conf:.2f}"
+                            cv2.putText(
+                                annotated, label, (x1, max(y1 - 10, 20)),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2,
+                            )
                 except Exception as e:
                     print(f"[Camera {self.camera_id}] Inference error: {e}")
 
@@ -201,6 +207,7 @@ class CameraStream:
                         confidence=best_conf,
                         screenshot_b64=_encode_frame_to_base64(annotated, quality=90),
                         bbox=best_bbox,
+                        class_name=best_class,
                     )
                     if now - self._last_webhook_time >= self.webhook_cooldown:
                         self._last_webhook_time = now
@@ -267,7 +274,13 @@ class CameraManager:
             cap.release()
         return available
 
-    def start_camera(self, camera_id: str, source: str | int) -> CameraStream:
+    def start_camera(
+        self,
+        camera_id: str,
+        source: str | int,
+        confidence: float | None = None,
+        classes: list[str] | None = None,
+    ) -> CameraStream:
         with self._lock:
             if camera_id in self._streams:
                 return self._streams[camera_id]
@@ -275,9 +288,10 @@ class CameraManager:
                 camera_id=camera_id,
                 source=source,
                 yolo_model=self._yolo_model,
-                confidence=config.CAMERA_PERSON_CONFIDENCE,
+                confidence=confidence if confidence is not None else config.CAMERA_PERSON_CONFIDENCE,
                 inference_interval=config.CAMERA_INFERENCE_INTERVAL,
                 webhook_cooldown=config.CAMERA_WEBHOOK_COOLDOWN,
+                classes=classes,
             )
             if self._webhook_url:
                 stream.add_webhook_callback(self._on_person_detected)

@@ -19,6 +19,7 @@ import {
   FileUp,
 } from "lucide-react";
 import { models } from "../data/models";
+import { COCO_CLASSES } from "../data/cocoClasses";
 import { CameraPanel } from "../components/CameraPanel";
 import { DetectionOverlay } from "../components/DetectionOverlay";
 
@@ -221,6 +222,7 @@ export function Playground() {
   const [textInput, setTextInput] = useState("");
   const [clipTexts, setClipTexts] = useState("a cat\na dog\na bird");
   const [clipMode, setClipMode] = useState<"classify" | "encode">("classify");
+  const [selectedClasses, setSelectedClasses] = useState<string[]>([]);
 
   const primaryInput = getPrimaryInputType(selectedModel.inputType);
 
@@ -251,6 +253,7 @@ export function Playground() {
     setTextInput("");
     setClipTexts("a cat\na dog\na bird");
     setClipMode("classify");
+    setSelectedClasses([]);
   }, [selectedModel.id]);
 
   const getInputs = (): Record<string, unknown> => {
@@ -260,6 +263,9 @@ export function Playground() {
     }
     if (selectedModel.id === "yolo26" || selectedModel.id === "yolov8-pose" || selectedModel.id === "grounding-dino") {
       base.confidence = confidence;
+    }
+    if (selectedModel.id === "yolo26" && selectedClasses.length > 0) {
+      base.classes = selectedClasses;
     }
     if (selectedModel.id === "detr") {
       base.threshold = confidence;
@@ -390,6 +396,7 @@ export function Playground() {
     setTextInput("");
     setClipTexts("a cat\na dog\na bird");
     setClipMode("classify");
+    setSelectedClasses([]);
   };
 
   return (
@@ -649,6 +656,37 @@ export function Playground() {
                     <div className="flex justify-between text-gray-600 text-xs mt-1">
                       <span>0.1</span>
                       <span>0.95</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Category multi-select for YOLO */}
+                {selectedModel.id === "yolo26" && (
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-gray-500 text-xs">检测类别</label>
+                      <span className="text-cyan-400 text-xs" style={{ fontWeight: 600 }}>
+                        {selectedClasses.length === 0 ? "全部" : `${selectedClasses.length} 项`}
+                      </span>
+                    </div>
+                    <div className="max-h-32 overflow-y-auto rounded-lg border border-white/10 bg-white/5 p-2 space-y-1">
+                      {COCO_CLASSES.map((cls) => (
+                        <label key={cls} className="flex items-center gap-2 cursor-pointer text-xs text-gray-400 hover:text-white">
+                          <input
+                            type="checkbox"
+                            checked={selectedClasses.includes(cls)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedClasses((prev) => [...prev, cls]);
+                              } else {
+                                setSelectedClasses((prev) => prev.filter((c) => c !== cls));
+                              }
+                            }}
+                            className="rounded border-white/10 bg-white/5 accent-cyan-400 shrink-0"
+                          />
+                          <span>{cls}</span>
+                        </label>
+                      ))}
                     </div>
                   </div>
                 )}

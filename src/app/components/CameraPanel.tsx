@@ -10,6 +10,7 @@ import {
   Eye,
   Activity,
 } from "lucide-react";
+import { COCO_CLASSES } from "../data/cocoClasses";
 
 interface CameraInfo {
   id: string;
@@ -32,6 +33,7 @@ interface DetectionEvent {
   timestamp: number;
   confidence: number;
   bbox: number[];
+  class_name?: string;
 }
 
 const API_BASE = import.meta.env.VITE_API_BASE || import.meta.env.VITE_API_BASE_URL || "http://localhost:8081";
@@ -56,6 +58,8 @@ export function CameraPanel() {
   const [error, setError] = useState<string | null>(null);
   const [detections, setDetections] = useState<DetectionEvent[]>([]);
   const [streamFps, setStreamFps] = useState(0);
+  const [confidence, setConfidence] = useState(0.5);
+  const [selectedClasses, setSelectedClasses] = useState<string[]>([]);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
@@ -126,6 +130,10 @@ export function CameraPanel() {
       const res = await fetch(`${API_BASE}/cameras/${selectedCamera}/start`, {
         method: "POST",
         headers: authHeaders(),
+        body: JSON.stringify({
+          confidence,
+          classes: selectedClasses,
+        }),
       });
       if (!res.ok) throw new Error("Failed to start camera");
       setIsStreaming(true);
@@ -160,9 +168,11 @@ export function CameraPanel() {
   useEffect(() => {
     if (!isStreaming || !selectedCamera) return;
 
-    const wsUrl = API_KEY
-      ? `${WS_BASE}/ws/cameras/${selectedCamera}?api_key=${encodeURIComponent(API_KEY)}`
-      : `${WS_BASE}/ws/cameras/${selectedCamera}`;
+    const wsParams = new URLSearchParams();
+    if (API_KEY) wsParams.set("api_key", API_KEY);
+    wsParams.set("confidence", String(confidence));
+    selectedClasses.forEach((cls) => wsParams.append("classes", cls));
+    const wsUrl = `${WS_BASE}/ws/cameras/${selectedCamera}?${wsParams.toString()}`;
     const ws = new WebSocket(wsUrl);
     ws.binaryType = "blob";
     wsRef.current = ws;
@@ -228,6 +238,7 @@ export function CameraPanel() {
                 timestamp: data.timestamp,
                 confidence: data.confidence,
                 bbox: data.bbox,
+                class_name: data.class_name,
               };
               // Avoid duplicates within 1s
               if (
@@ -360,6 +371,63 @@ export function CameraPanel() {
 
           <div className="p-5 rounded-2xl border border-white/5 bg-white/[0.02]">
             <label className="text-gray-400 text-xs mb-3 block" style={{ fontWeight: 500 }}>
+              检测配置
+            </label>
+            <div className="space-y-4">
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-gray-500 text-xs">置信度阈值</label>
+                  <span className="text-cyan-400 text-xs" style={{ fontWeight: 600 }}>{confidence.toFixed(2)}</span>
+                </div>
+                <input
+                  type="range"
+                  min="0.1"
+                  max="0.95"
+                  step="0.05"
+                  value={confidence}
+                  onChange={(e) => setConfidence(parseFloat(e.target.value))}
+                  disabled={isStreaming}
+                  className="w-full accent-cyan-400 cursor-pointer disabled:opacity-50"
+                />
+                <div className="flex justify-between text-gray-600 text-xs mt-1">
+                  <span>0.1</span>
+                  <span>0.95</span>
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-gray-500 text-xs">检测类别</label>
+                  <span className="text-cyan-400 text-xs" style={{ fontWeight: 600 }}>
+                    {selectedClasses.length === 0 ? "全部" : `${selectedClasses.length} 项`}
+                  </span>
+                </div>
+                <div className="max-h-28 overflow-y-auto rounded-lg border border-white/10 bg-white/5 p-2 space-y-1">
+                  {COCO_CLASSES.map((cls) => (
+                    <label key={cls} className="flex items-center gap-2 cursor-pointer text-xs text-gray-400 hover:text-white">
+                      <input
+                        type="checkbox"
+                        checked={selectedClasses.includes(cls)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedClasses((prev) => [...prev, cls]);
+                          } else {
+                            setSelectedClasses((prev) => prev.filter((c) => c !== cls));
+                          }
+                        }}
+                        disabled={isStreaming}
+                        className="rounded border-white/10 bg-white/5 accent-cyan-400 shrink-0 disabled:opacity-50"
+                      />
+                      <span>{cls}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-5 rounded-2xl border border-white/5 bg-white/[0.02]">
+            <label className="text-gray-400 text-xs mb-3 block" style={{ fontWeight: 500 }}>
               流状态
             </label>
             <div className="space-y-3">
@@ -384,10 +452,6 @@ export function CameraPanel() {
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-500">模型</span>
                 <span className="text-gray-300 text-xs">YOLO2026 (yolo26n)</span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-500">检测类别</span>
-                <span className="text-gray-300 text-xs">person</span>
               </div>
             </div>
           </div>
@@ -448,7 +512,7 @@ export function CameraPanel() {
                       {new Date(d.timestamp * 1000).toLocaleTimeString()}
                     </span>
                     <span className="text-green-400" style={{ fontWeight: 500 }}>
-                      检测到人员
+                      检测到 {d.class_name || "目标"}
                     </span>
                     <span className="text-gray-400">置信度 {d.confidence.toFixed(2)}</span>
                   </div>

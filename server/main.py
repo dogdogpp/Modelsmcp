@@ -18,7 +18,7 @@ from contextlib import asynccontextmanager
 import base64
 import json
 
-from fastapi import FastAPI, File, Form, HTTPException, Depends, Security, UploadFile, WebSocket, WebSocketDisconnect, Query
+from fastapi import FastAPI, File, Form, HTTPException, Depends, Security, UploadFile, WebSocket, WebSocketDisconnect, Query, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.security.api_key import APIKeyHeader
@@ -190,7 +190,11 @@ def list_cameras():
 
 
 @app.post("/cameras/{camera_id}/start", dependencies=[Depends(verify_api_key)])
-def start_camera(camera_id: str):
+def start_camera(
+    camera_id: str,
+    confidence: float = Body(0.5),
+    classes: list[str] = Body([]),
+):
     cm = _get_camera_manager()
     available = cm.discover_cameras()
     source = None
@@ -200,7 +204,7 @@ def start_camera(camera_id: str):
             break
     if source is None:
         raise HTTPException(status_code=404, detail=f"Camera '{camera_id}' not available")
-    stream = cm.start_camera(camera_id, source)
+    stream = cm.start_camera(camera_id, source, confidence=confidence, classes=classes or None)
     return {"camera_id": camera_id, "status": stream.status}
 
 
@@ -250,6 +254,7 @@ def get_camera_detections(camera_id: str):
         "timestamp": event.timestamp,
         "confidence": event.confidence,
         "bbox": event.bbox,
+        "class_name": event.class_name,
     }
 
 
@@ -263,7 +268,12 @@ def get_camera_status(camera_id: str):
 
 
 @app.websocket("/ws/cameras/{camera_id}")
-async def camera_websocket(websocket: WebSocket, camera_id: str):
+async def camera_websocket(
+    websocket: WebSocket,
+    camera_id: str,
+    confidence: float = Query(0.5),
+    classes: list[str] = Query([]),
+):
     # Security: Verify API Key (timing-safe) before accepting WebSocket connection.
     api_key = websocket.query_params.get("api_key") or websocket.headers.get("x-api-key")
     if API_KEY:
@@ -284,7 +294,9 @@ async def camera_websocket(websocket: WebSocket, camera_id: str):
         if source is None:
             await websocket.close(code=4004, reason="Camera not found")
             return
-        stream = cm.start_camera(camera_id, source)
+        stream = cm.start_camera(
+            camera_id, source, confidence=confidence, classes=classes or None
+        )
         await asyncio.sleep(0.5)
 
     await websocket.accept()

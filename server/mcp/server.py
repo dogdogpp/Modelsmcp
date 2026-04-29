@@ -261,6 +261,7 @@ def _real_yolov8(args: dict[str, Any]) -> CallResponse:
     t0 = time.time()
     img = _decode_image(args["image"])
     conf = args.get("confidence", 0.5)
+    classes = args.get("classes", [])
     model = _load_yolo_model("yolo26n")
     results = model(img, conf=conf, verbose=False)
     boxes = results[0].boxes
@@ -269,8 +270,11 @@ def _real_yolov8(args: dict[str, Any]) -> CallResponse:
         names = model.names
         for i in range(len(boxes)):
             cls_id = int(boxes.cls[i].item())
+            cls_name = names.get(cls_id, str(cls_id))
+            if classes and cls_name not in classes:
+                continue
             detections.append({
-                "class": names.get(cls_id, str(cls_id)),
+                "class": cls_name,
                 "confidence": round(float(boxes.conf[i].item()), 4),
                 "bbox": [round(float(v), 2) for v in boxes.xyxy[i].tolist()],
             })
