@@ -50,6 +50,24 @@ class WhisperHandler:
             os.close(fd)
             return path
 
+        if audio.startswith("data:"):
+            # Handle data URI: data:{mime};base64,{data}
+            header, _, data = audio.partition(",")
+            mime = "application/octet-stream"
+            if ";" in header:
+                mime = header[len("data:"):].split(";")[0]
+            ext = ".mp3"
+            if "wav" in mime:
+                ext = ".wav"
+            elif "flac" in mime:
+                ext = ".flac"
+            elif "m4a" in mime or "mp4" in mime:
+                ext = ".m4a"
+            fd, path = tempfile.mkstemp(suffix=ext)
+            with os.fdopen(fd, "wb") as f:
+                f.write(base64.b64decode(data))
+            return path
+
         if audio.startswith("base64://"):
             data = audio[len("base64://"):]
             fd, path = tempfile.mkstemp(suffix=".mp3")
