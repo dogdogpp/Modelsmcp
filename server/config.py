@@ -29,7 +29,9 @@ MOCK_MODE = os.getenv("DEEPMCP_MOCK_MODE", "false").lower() == "true"
 
 # Camera configuration
 CAMERA_ENABLED = os.getenv("DEEPMCP_CAMERA_ENABLED", "true").lower() == "true"
-_raw_camera_ids = os.getenv("DEEPMCP_CAMERA_DEVICE_IDS", "0")
+# Default scans indices 0-9 to auto-discover non-zero V4L2 devices.
+# Override via env var if you need a restricted list.
+_raw_camera_ids = os.getenv("DEEPMCP_CAMERA_DEVICE_IDS", "0,1,2,3,4,5,6,7,8,9")
 CAMERA_DEVICE_IDS = [d.strip() for d in _raw_camera_ids.split(",") if d.strip() != ""]
 CAMERA_INFERENCE_INTERVAL = float(os.getenv("DEEPMCP_CAMERA_INFERENCE_INTERVAL", "0.2"))
 CAMERA_PERSON_CONFIDENCE = float(os.getenv("DEEPMCP_CAMERA_PERSON_CONFIDENCE", "0.5"))

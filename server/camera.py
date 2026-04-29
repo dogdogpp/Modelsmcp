@@ -225,23 +225,45 @@ class CameraManager:
         self._webhook_key = config.OPENCLAW_API_KEY
 
     def discover_cameras(self) -> list[dict[str, Any]]:
-        """Probe configured camera device IDs and return available ones."""
+        """Probe configured camera device IDs and return available ones.
+
+        Active streams are reflected in the result to avoid V4L2 exclusive-lock
+        conflicts and to prevent an empty available list while streaming.
+        Dummy devices (0x0 resolution) are filtered out.
+        """
         available = []
         for dev_id in config.CAMERA_DEVICE_IDS:
             cam_id = f"cam_{dev_id}"
+            # If already actively streaming, echo it without re-opening the
+            # device (avoids V4L2 exclusive-lock conflict).
+            with self._lock:
+                stream = self._streams.get(cam_id)
+            if stream is not None and stream.status == "streaming":
+                available.append({
+                    "id": cam_id,
+                    "name": f"Camera {dev_id}",
+                    "source": str(dev_id),
+                    "resolution": None,
+                    "fps": round(stream.fps, 1) if stream.fps > 0 else None,
+                    "status": "streaming",
+                })
+                continue
+
             cap = cv2.VideoCapture(int(dev_id))
             if cap.isOpened():
                 w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
                 h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                fps = cap.get(cv2.CAP_PROP_FPS)
-                available.append({
-                    "id": cam_id,
-                    "name": f"Camera {dev_id}",
-                    "source": dev_id,
-                    "resolution": f"{w}x{h}",
-                    "fps": round(fps, 1) if fps > 0 else None,
-                    "status": "available",
-                })
+                # Filter dummy devices that report 0x0 resolution
+                if w > 0 and h > 0:
+                    fps = cap.get(cv2.CAP_PROP_FPS)
+                    available.append({
+                        "id": cam_id,
+                        "name": f"Camera {dev_id}",
+                        "source": str(dev_id),
+                        "resolution": f"{w}x{h}",
+                        "fps": round(fps, 1) if fps > 0 else None,
+                        "status": "available",
+                    })
             cap.release()
         return available
 
