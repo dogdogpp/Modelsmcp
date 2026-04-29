@@ -2,6 +2,7 @@
 
 import base64
 import io
+import threading
 import time
 import random
 from typing import Any, Callable
@@ -27,6 +28,7 @@ _TOOL_SCHEMAS: dict[str, McpToolSchema] = {}
 
 # Lazy-loaded real model instances
 _YOLO_MODEL = None
+_YOLO_LOCK = threading.Lock()
 
 # Camera manager instance (set by main.py lifespan)
 _CAMERA_MANAGER = None
@@ -263,7 +265,8 @@ def _real_yolov8(args: dict[str, Any]) -> CallResponse:
     conf = args.get("confidence", 0.5)
     classes = args.get("classes", [])
     model = _load_yolo_model("yolo26n")
-    results = model(img, conf=conf, verbose=False)
+    with _YOLO_LOCK:
+        results = model(img, conf=conf, verbose=False)
     boxes = results[0].boxes
     detections = []
     if boxes is not None and len(boxes) > 0:

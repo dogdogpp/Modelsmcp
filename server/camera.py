@@ -13,6 +13,7 @@ import numpy as np
 from PIL import Image
 
 import config
+from mcp.server import _YOLO_LOCK
 
 # Suppress noisy OpenCV warnings when no camera device is present.
 cv2.utils.logging.setLogLevel(cv2.utils.logging.LOG_LEVEL_ERROR)
@@ -171,7 +172,8 @@ class CameraStream:
             if now - last_inference >= self.inference_interval and self.yolo_model is not None:
                 last_inference = now
                 try:
-                    results = self.yolo_model(frame, conf=self.confidence, verbose=False)
+                    with _YOLO_LOCK:
+                        results = self.yolo_model(frame, conf=self.confidence, verbose=False)
                     boxes = results[0].boxes
                     if boxes is not None and len(boxes) > 0:
                         names = self.yolo_model.names
@@ -282,8 +284,15 @@ class CameraManager:
         classes: list[str] | None = None,
     ) -> CameraStream:
         with self._lock:
-            if camera_id in self._streams:
-                return self._streams[camera_id]
+            existing = self._streams.get(camera_id)
+            if existing is not None:
+                # Hot-reconfig: if params differ, stop and recreate
+                target_conf = confidence if confidence is not None else config.CAMERA_PERSON_CONFIDENCE
+                if existing.confidence != target_conf or existing.classes != classes:
+                    existing.stop()
+                    self._streams.pop(camera_id, None)
+                else:
+                    return existing
             stream = CameraStream(
                 camera_id=camera_id,
                 source=source,
