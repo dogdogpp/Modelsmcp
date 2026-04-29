@@ -285,10 +285,13 @@ class CameraManager:
     ) -> CameraStream:
         with self._lock:
             existing = self._streams.get(camera_id)
+            # Normalize: empty list and None both mean "no class filter"
+            normalized_classes = classes if classes else None
             if existing is not None:
                 # Hot-reconfig: if params differ, stop and recreate
                 target_conf = confidence if confidence is not None else config.CAMERA_PERSON_CONFIDENCE
-                if existing.confidence != target_conf or existing.classes != classes:
+                existing_classes = existing.classes if existing.classes else None
+                if existing.confidence != target_conf or existing_classes != normalized_classes:
                     existing.stop()
                     self._streams.pop(camera_id, None)
                 else:
@@ -300,7 +303,7 @@ class CameraManager:
                 confidence=confidence if confidence is not None else config.CAMERA_PERSON_CONFIDENCE,
                 inference_interval=config.CAMERA_INFERENCE_INTERVAL,
                 webhook_cooldown=config.CAMERA_WEBHOOK_COOLDOWN,
-                classes=classes,
+                classes=normalized_classes,
             )
             if self._webhook_url:
                 stream.add_webhook_callback(self._on_person_detected)
