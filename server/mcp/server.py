@@ -112,7 +112,7 @@ _DEFAULT_CAMERA_ALIASES: dict[str, int] = {
     "室内": 1,
     "indoor": 1,
     "room": 1,
-    " backyard": 2,
+    "backyard": 2,
     "后院": 2,
 }
 

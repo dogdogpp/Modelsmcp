@@ -230,6 +230,45 @@ class TestOpenClawCameraE2E:
         assert res.status_code == 400
         assert res.json()["detail"]["code"] == "CAMERA_NOT_FOUND"
 
+    def test_call_camera_get_frame_resolves_alias_backyard_en(self, client_with_camera):
+        """Alias 'backyard' should resolve to the third available camera."""
+        client, mock_manager, _ = client_with_camera
+        # Ensure a third camera is available
+        mock_manager.discover_cameras.return_value = [
+            {"id": "cam_0", "name": "Camera 0", "source": "0", "resolution": "640x480", "fps": 30.0, "status": "available"},
+            {"id": "cam_1", "name": "Camera 1", "source": "1", "resolution": "1920x1080", "fps": 60.0, "status": "available"},
+            {"id": "cam_2", "name": "Camera 2", "source": "2", "resolution": "1280x720", "fps": 30.0, "status": "available"},
+        ]
+        mock_stream = MagicMock()
+        mock_stream.get_latest_frame_bytes.return_value = b"fake_frame"
+        mock_stream.get_last_detection_bytes.return_value = b"fake_frame"
+        mock_stream.get_last_detection_event.return_value = None
+        mock_stream.status = "streaming"
+        mock_stream.fps = 30.0
+        mock_manager.get_stream.return_value = mock_stream
+        res = client.post("/call", json={"tool": "camera_get_frame", "arguments": {"camera_id": "backyard"}})
+        assert res.status_code == 200
+        mock_manager.get_stream.assert_called_with("cam_2")
+
+    def test_call_camera_get_frame_resolves_alias_backyard_cn(self, client_with_camera):
+        """Alias '后院' should resolve to the third available camera."""
+        client, mock_manager, _ = client_with_camera
+        mock_manager.discover_cameras.return_value = [
+            {"id": "cam_0", "name": "Camera 0", "source": "0", "resolution": "640x480", "fps": 30.0, "status": "available"},
+            {"id": "cam_1", "name": "Camera 1", "source": "1", "resolution": "1920x1080", "fps": 60.0, "status": "available"},
+            {"id": "cam_2", "name": "Camera 2", "source": "2", "resolution": "1280x720", "fps": 30.0, "status": "available"},
+        ]
+        mock_stream = MagicMock()
+        mock_stream.get_latest_frame_bytes.return_value = b"fake_frame"
+        mock_stream.get_last_detection_bytes.return_value = b"fake_frame"
+        mock_stream.get_last_detection_event.return_value = None
+        mock_stream.status = "streaming"
+        mock_stream.fps = 30.0
+        mock_manager.get_stream.return_value = mock_stream
+        res = client.post("/call", json={"tool": "camera_get_frame", "arguments": {"camera_id": "后院"}})
+        assert res.status_code == 200
+        mock_manager.get_stream.assert_called_with("cam_2")
+
     # -----------------------------------------------------------------------
     # 4. camera_get_last_detection
     # -----------------------------------------------------------------------
