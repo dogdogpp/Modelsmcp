@@ -1,4 +1,10 @@
-"""Camera manager with real-time YOLO person detection."""
+"""Camera manager with real-time YOLO person detection.
+
+Webhook integration:
+- Detection events are handed off to WebhookQueue for reliable delivery.
+- WebhookQueue provides exponential backoff retry, SQLite disk persistence,
+  and 60-second deduplication / alert suppression per camera_id + class.
+"""
 
 import base64
 import io
@@ -232,6 +238,7 @@ class CameraManager:
         self._streams: dict[str, CameraStream] = {}
         self._lock = threading.Lock()
         self._webhook_queue = webhook_queue
+        self._webhook_url = getattr(webhook_queue, "webhook_url", "") if webhook_queue else ""
 
     def discover_cameras(self) -> list[dict[str, Any]]:
         """Probe configured camera device IDs and return available ones.
@@ -342,6 +349,8 @@ class CameraManager:
 
     def _on_person_detected(self, event: DetectionEvent) -> None:
         if self._webhook_queue is None:
+            return
+        if not self._webhook_url:
             return
         payload = {
             "event": "person_detected",

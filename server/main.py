@@ -261,6 +261,26 @@ def metrics():
 
 
 # ---------------------------------------------------------------------------
+# SSE streaming endpoint
+# ---------------------------------------------------------------------------
+
+async def _sse_stream():
+    """Mock SSE stream for OpenClaw progress / result / error events."""
+    yield "event: progress\ndata: {\"status\": \"initializing\"}\n\n"
+    await asyncio.sleep(0.01)
+    yield "event: progress\ndata: {\"status\": \"running\"}\n\n"
+    await asyncio.sleep(0.01)
+    yield "event: result\ndata: {\"status\": \"done\"}\n\n"
+    await asyncio.sleep(0.01)
+    yield "event: error\ndata: {\"status\": \"stream_closed\"}\n\n"
+
+
+@app.get("/sse")
+async def sse_endpoint():
+    return StreamingResponse(_sse_stream(), media_type="text/event-stream")
+
+
+# ---------------------------------------------------------------------------
 # Camera endpoints
 # ---------------------------------------------------------------------------
 
