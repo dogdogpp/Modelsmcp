@@ -102,6 +102,51 @@ def _load_yolo_model(variant: str = "yolo26n"):
     return _YOLO_MODEL
 
 
+def _normalize_camera_id(camera_id: str | None) -> str | None:
+    """Normalize camera_id so numeric inputs like '0' become 'cam_0'."""
+    if camera_id is None:
+        return None
+    if isinstance(camera_id, str) and camera_id.isdigit():
+        return f"cam_{camera_id}"
+    return camera_id
+
+
+# Alias -> index in available_cameras list (0 = first, 1 = second, etc.)
+_DEFAULT_CAMERA_ALIASES: dict[str, int] = {
+    "default": 0,
+    "main": 0,
+    "门口": 0,
+    "entrance": 0,
+    "室内": 1,
+    "indoor": 1,
+    "room": 1,
+    "backyard": 2,
+    "后院": 2,
+}
+
+
+def _resolve_camera_alias(camera_id: str, available_cameras: list[dict[str, Any]]) -> str:
+    """Resolve alias names like 'default' or '门口' to actual camera ids.
+
+    Falls back to the original camera_id if alias is unknown or index out of range.
+    """
+    idx = _DEFAULT_CAMERA_ALIASES.get(camera_id)
+    if idx is not None and available_cameras and idx < len(available_cameras):
+        return available_cameras[idx]["id"]
+    return camera_id
+
+
+def _resolve_camera_id(raw_id: str | None) -> str | None:
+    """Full resolution pipeline: normalize digits, then resolve aliases."""
+    camera_id = _normalize_camera_id(raw_id)
+    if camera_id is None or _CAMERA_MANAGER is None:
+        return camera_id
+    if camera_id in _DEFAULT_CAMERA_ALIASES:
+        available = _CAMERA_MANAGER.discover_cameras()
+        camera_id = _resolve_camera_alias(camera_id, available)
+    return camera_id
+
+
 # ---------------------------------------------------------------------------
 # Tool schemas
 # ---------------------------------------------------------------------------
@@ -233,30 +278,39 @@ _MOCK_TOOL_SCHEMAS = [
     ),
     McpToolSchema(
         name="camera_list",
-        description="List available local cameras and their current status",
+        description="List available local cameras and their current status. Call this first to discover valid camera identifiers before using camera_get_frame or camera_get_last_detection.",
         parameters={
             "type": "object",
             "properties": {},
+            "required": [],
         },
     ),
     McpToolSchema(
         name="camera_get_frame",
-        description="Get the real-time frame from a specified camera as base64 JPEG",
+        description="Get the real-time frame from a specified camera as base64 JPEG. Example natural language: '查看门口摄像头实时画面' or '获取 cam_0 的画面'. Use camera_list first if you are unsure of the identifier.",
         parameters={
             "type": "object",
             "properties": {
-                "camera_id": {"type": "string", "description": "Camera identifier, e.g. cam_0"},
+                "camera_id": {
+                    "type": "string",
+                    "description": "Camera identifier. Accepts canonical ID (cam_0), numeric string (0), or alias (default, main, 门口, 室内).",
+                    "examples": ["cam_0", "0", "default", "门口"],
+                },
             },
             "required": ["camera_id"],
         },
     ),
     McpToolSchema(
         name="camera_get_last_detection",
-        description="Get the most recent frame containing a detected person from a specified camera",
+        description="Get the most recent frame containing a detected person from a specified camera. Example natural language: '查看门口摄像头最近一次检测到人的画面' or '获取 cam_0 的人形检测截图'. Use camera_list first if you are unsure of the identifier.",
         parameters={
             "type": "object",
             "properties": {
-                "camera_id": {"type": "string", "description": "Camera identifier, e.g. cam_0"},
+                "camera_id": {
+                    "type": "string",
+                    "description": "Camera identifier. Accepts canonical ID (cam_0), numeric string (0), or alias (default, main, 门口, 室内).",
+                    "examples": ["cam_0", "0", "default", "门口"],
+                },
             },
             "required": ["camera_id"],
         },
@@ -510,7 +564,7 @@ def _camera_get_frame(args: dict[str, Any]) -> CallResponse:
             result=None,
             error={"code": "CAMERA_DISABLED", "message": "Camera manager not initialized"},
         )
-    camera_id = args.get("camera_id")
+    camera_id = _resolve_camera_id(args.get("camera_id"))
     stream = _CAMERA_MANAGER.get_stream(camera_id)
     if stream is None:
         # Auto-start if camera exists in discovery
@@ -568,7 +622,7 @@ def _camera_get_last_detection(args: dict[str, Any]) -> CallResponse:
             result=None,
             error={"code": "CAMERA_DISABLED", "message": "Camera manager not initialized"},
         )
-    camera_id = args.get("camera_id")
+    camera_id = _resolve_camera_id(args.get("camera_id"))
     stream = _CAMERA_MANAGER.get_stream(camera_id)
     if stream is None:
         return CallResponse(
