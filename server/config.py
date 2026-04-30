@@ -41,6 +41,13 @@ CAMERA_WEBHOOK_COOLDOWN = float(os.getenv("DEEPMCP_CAMERA_WEBHOOK_COOLDOWN", "5.
 OPENCLAW_WEBHOOK_URL = os.getenv("OPENCLAW_WEBHOOK_URL", "")
 OPENCLAW_API_KEY = os.getenv("OPENCLAW_API_KEY", "")
 
+# Webhook reliability settings
+WEBHOOK_TIMEOUT = float(os.getenv("DEEPMCP_WEBHOOK_TIMEOUT", "10.0"))
+WEBHOOK_MAX_RETRIES = int(os.getenv("DEEPMCP_WEBHOOK_MAX_RETRIES", "5"))
+WEBHOOK_DEDUP_WINDOW_SECONDS = float(os.getenv("DEEPMCP_WEBHOOK_DEDUP_WINDOW_SECONDS", "60.0"))
+WEBHOOK_DB_PATH = os.getenv("DEEPMCP_WEBHOOK_DB_PATH", str(BASE_DIR / "webhook_queue.db"))
+WEBHOOK_BACKOFF_BASE_SECONDS = float(os.getenv("DEEPMCP_WEBHOOK_BACKOFF_BASE_SECONDS", "1.0"))
+
 # Model-specific configs
 MODEL_CONFIG = {
     "yolo26": {"enabled": True, "variant": "yolo26n", "classes": 80},

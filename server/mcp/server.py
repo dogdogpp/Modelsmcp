@@ -33,6 +33,14 @@ _YOLO_LOCK = threading.Lock()
 # Camera manager instance (set by main.py lifespan)
 _CAMERA_MANAGER = None
 
+# Webhook queue instance (set by main.py lifespan)
+_WEBHOOK_QUEUE = None
+
+
+def set_webhook_queue(queue) -> None:
+    global _WEBHOOK_QUEUE
+    _WEBHOOK_QUEUE = queue
+
 
 def register_tool(schema: McpToolSchema, handler: Callable[[dict[str, Any]], CallResponse]) -> None:
     _TOOL_SCHEMAS[schema.name] = schema
@@ -718,6 +726,15 @@ def get_health() -> HealthResponse:
 
 def get_metrics() -> MetricsResponse:
     now = time.strftime("%H:%M:%S")
+    webhook_metrics = {}
+    if _WEBHOOK_QUEUE is not None:
+        webhook_metrics = _WEBHOOK_QUEUE.get_metrics()
+    else:
+        webhook_metrics = {
+            "webhook_delivery_total": 0,
+            "webhook_delivery_failed_total": 0,
+            "webhook_queue_depth": 0,
+        }
     return MetricsResponse(
         latency={
             "avg_ms": 25.0,
@@ -742,4 +759,5 @@ def get_metrics() -> MetricsResponse:
             "cpu_utilization": 23,
             "disk_used_gb": 48.3,
         },
+        webhook=webhook_metrics,
     )
