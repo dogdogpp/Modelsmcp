@@ -26,10 +26,16 @@ from fastapi.security.api_key import APIKeyHeader
 from config import (
     CORS_ORIGINS, HOST, MOCK_MODE, PORT, API_KEY,
     CAMERA_ENABLED, CAMERA_DEVICE_IDS,
+    OPENCLAW_WEBHOOK_URL, OPENCLAW_API_KEY,
+    WEBHOOK_TIMEOUT, WEBHOOK_MAX_RETRIES,
+    WEBHOOK_DEDUP_WINDOW_SECONDS, WEBHOOK_DB_PATH,
+    WEBHOOK_BACKOFF_BASE_SECONDS,
 )
 from mcp.server import init_tools, get_tools, call_tool, call_tool_stream, get_health, get_metrics
 from mcp.protocol import CallRequest, SseCallRequest, format_sse
 from camera import CameraManager
+from webhook import WebhookQueue
+from mcp.server import set_webhook_queue
 
 # Optionally register real-mode model handlers (Whisper / YOLO) into server.models registry.
 # Failures (missing optional deps like `whisper` or `ultralytics`) must not crash the server.
@@ -59,11 +65,26 @@ async def verify_api_key(api_key: str = Security(api_key_header)):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    webhook_queue = None
+    if OPENCLAW_WEBHOOK_URL:
+        webhook_queue = WebhookQueue(
+            db_path=WEBHOOK_DB_PATH,
+            webhook_url=OPENCLAW_WEBHOOK_URL,
+            api_key=OPENCLAW_API_KEY,
+            timeout=WEBHOOK_TIMEOUT,
+            max_retries=WEBHOOK_MAX_RETRIES,
+            dedup_window_seconds=WEBHOOK_DEDUP_WINDOW_SECONDS,
+            backoff_base_seconds=WEBHOOK_BACKOFF_BASE_SECONDS,
+        )
+        webhook_queue.start()
+        set_webhook_queue(webhook_queue)
+        print(f"[DeepMCP] Webhook queue initialized. Target: {OPENCLAW_WEBHOOK_URL}")
+
     camera_manager = None
     if CAMERA_ENABLED:
         from mcp.server import _load_yolo_model
         yolo_model = _load_yolo_model("yolo26n")
-        camera_manager = CameraManager(yolo_model)
+        camera_manager = CameraManager(yolo_model, webhook_queue=webhook_queue)
         # Auto-start configured cameras
         available = camera_manager.discover_cameras()
         if available:
@@ -74,10 +95,13 @@ async def lifespan(app: FastAPI):
             print("[DeepMCP] No cameras detected; camera manager initialized but idle.")
     init_tools(MOCK_MODE, camera_manager)
     app.state.camera_manager = camera_manager
+    app.state.webhook_queue = webhook_queue
     print("[DeepMCP] Server started. Mock mode:", MOCK_MODE)
     yield
     if camera_manager is not None:
         camera_manager.stop_all()
+    if webhook_queue is not None:
+        webhook_queue.stop()
     print("[DeepMCP] Server shutting down...")
 
 

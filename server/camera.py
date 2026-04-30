@@ -75,7 +75,7 @@ class CameraStream:
         self._annotated_frame: np.ndarray | None = None
         self._last_detection_frame: np.ndarray | None = None
         self._last_detection_event: DetectionEvent | None = None
-        self._last_webhook_time: float = 0.0
+        self._last_webhook_time_per_class: dict[str, float] = {}
         self._status: str = "idle"
         self._fps: float = 0.0
 
@@ -211,8 +211,9 @@ class CameraStream:
                         bbox=best_bbox,
                         class_name=best_class,
                     )
-                    if now - self._last_webhook_time >= self.webhook_cooldown:
-                        self._last_webhook_time = now
+                    last_sent = self._last_webhook_time_per_class.get(best_class, 0.0)
+                    if now - last_sent >= self.webhook_cooldown:
+                        self._last_webhook_time_per_class[best_class] = now
                         self._trigger_webhook(self._last_detection_event)
 
     def _trigger_webhook(self, event: DetectionEvent) -> None:
@@ -226,12 +227,11 @@ class CameraStream:
 class CameraManager:
     """Manages all camera streams."""
 
-    def __init__(self, yolo_model: Any) -> None:
+    def __init__(self, yolo_model: Any, webhook_queue: Any | None = None) -> None:
         self._yolo_model = yolo_model
         self._streams: dict[str, CameraStream] = {}
         self._lock = threading.Lock()
-        self._webhook_url = config.OPENCLAW_WEBHOOK_URL
-        self._webhook_key = config.OPENCLAW_API_KEY
+        self._webhook_queue = webhook_queue
 
     def discover_cameras(self) -> list[dict[str, Any]]:
         """Probe configured camera device IDs and return available ones.
@@ -305,7 +305,7 @@ class CameraManager:
                 webhook_cooldown=config.CAMERA_WEBHOOK_COOLDOWN,
                 classes=normalized_classes,
             )
-            if self._webhook_url:
+            if self._webhook_queue is not None:
                 stream.add_webhook_callback(self._on_person_detected)
             stream.start()
             self._streams[camera_id] = stream
@@ -341,7 +341,7 @@ class CameraManager:
             ]
 
     def _on_person_detected(self, event: DetectionEvent) -> None:
-        if not self._webhook_url:
+        if self._webhook_queue is None:
             return
         payload = {
             "event": "person_detected",
@@ -350,21 +350,8 @@ class CameraManager:
             "confidence": event.confidence,
             "screenshot_base64": event.screenshot_b64,
             "bbox": event.bbox,
+            "class_name": event.class_name,
         }
-        # Fire-and-forget in a background thread to avoid blocking detection loop
-        threading.Thread(
-            target=self._send_webhook_sync,
-            args=(payload,),
-            daemon=True,
-        ).start()
-
-    def _send_webhook_sync(self, payload: dict[str, Any]) -> None:
-        try:
-            import httpx
-            headers = {"Content-Type": "application/json"}
-            if self._webhook_key:
-                headers["Authorization"] = f"Bearer {self._webhook_key}"
-            with httpx.Client(timeout=5.0) as client:
-                client.post(self._webhook_url, json=payload, headers=headers)
-        except Exception:
-            pass
+        self._webhook_queue.enqueue(
+            event.camera_id, event.class_name, payload, confidence=event.confidence
+        )

@@ -58,6 +58,7 @@ class MetricsResponse(BaseModel):
     latency: dict[str, Any]
     throughput: dict[str, Any]
     system: dict[str, Any]
+    webhook: dict[str, Any] | None = None
 
 
 class ApiErrorResponse(BaseModel):
