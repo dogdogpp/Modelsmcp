@@ -109,12 +109,31 @@ class TestOpenClawCameraE2E:
         assert "camera_id" in schema["parameters"]["required"]
         assert "cam_0" in schema["description"] or "0" in schema["description"]
 
+    def test_camera_get_frame_schema_has_examples(self, client_with_camera):
+        client, _, _ = client_with_camera
+        res = client.get("/tools")
+        data = res.json()
+        schema = next(t for t in data["tools"] if t["name"] == "camera_get_frame")
+        cam_prop = schema["parameters"]["properties"]["camera_id"]
+        assert "examples" in cam_prop
+        assert "cam_0" in cam_prop["examples"]
+        assert "default" in cam_prop["examples"] or "门口" in cam_prop["examples"]
+
     def test_camera_get_last_detection_schema_requires_camera_id(self, client_with_camera):
         client, _, _ = client_with_camera
         res = client.get("/tools")
         data = res.json()
         schema = next(t for t in data["tools"] if t["name"] == "camera_get_last_detection")
         assert "camera_id" in schema["parameters"]["required"]
+
+    def test_camera_get_last_detection_schema_has_examples(self, client_with_camera):
+        client, _, _ = client_with_camera
+        res = client.get("/tools")
+        data = res.json()
+        schema = next(t for t in data["tools"] if t["name"] == "camera_get_last_detection")
+        cam_prop = schema["parameters"]["properties"]["camera_id"]
+        assert "examples" in cam_prop
+        assert "cam_0" in cam_prop["examples"]
 
     # -----------------------------------------------------------------------
     # 2. camera_list
@@ -178,6 +197,39 @@ class TestOpenClawCameraE2E:
         data = res.json()
         assert data["detail"]["code"] == "CAMERA_NOT_FOUND"
 
+    def test_call_camera_get_frame_resolves_alias_default(self, client_with_camera):
+        """Alias 'default' should resolve to the first available camera."""
+        client, mock_manager, _ = client_with_camera
+        res = client.post("/call", json={"tool": "camera_get_frame", "arguments": {"camera_id": "default"}})
+        assert res.status_code == 200
+        mock_manager.get_stream.assert_called_with("cam_0")
+
+    def test_call_camera_get_frame_resolves_alias_chinese_entrance(self, client_with_camera):
+        """Alias '门口' should resolve to the first available camera."""
+        client, mock_manager, _ = client_with_camera
+        res = client.post("/call", json={"tool": "camera_get_frame", "arguments": {"camera_id": "门口"}})
+        assert res.status_code == 200
+        mock_manager.get_stream.assert_called_with("cam_0")
+
+    def test_call_camera_get_frame_resolves_alias_chinese_indoor(self, client_with_camera):
+        """Alias '室内' should resolve to the second available camera."""
+        client, mock_manager, _ = client_with_camera
+        res = client.post("/call", json={"tool": "camera_get_frame", "arguments": {"camera_id": "室内"}})
+        assert res.status_code == 200
+        mock_manager.get_stream.assert_called_with("cam_1")
+
+    def test_call_camera_get_frame_alias_out_of_range_fallback(self, client_with_camera):
+        """Alias pointing to index beyond available cameras should fall back gracefully."""
+        client, mock_manager, _ = client_with_camera
+        # Only one camera available; '室内' (index 1) is out of range
+        mock_manager.discover_cameras.return_value = [
+            {"id": "cam_0", "name": "Camera 0", "source": "0", "resolution": "640x480", "fps": 30.0, "status": "available"},
+        ]
+        mock_manager.get_stream.return_value = None
+        res = client.post("/call", json={"tool": "camera_get_frame", "arguments": {"camera_id": "室内"}})
+        assert res.status_code == 400
+        assert res.json()["detail"]["code"] == "CAMERA_NOT_FOUND"
+
     # -----------------------------------------------------------------------
     # 4. camera_get_last_detection
     # -----------------------------------------------------------------------
@@ -222,6 +274,18 @@ class TestOpenClawCameraE2E:
         assert res.status_code == 400
         data = res.json()
         assert data["detail"]["code"] == "CAMERA_NOT_FOUND"
+
+    def test_call_camera_get_last_detection_resolves_alias_default(self, client_with_camera):
+        client, mock_manager, _ = client_with_camera
+        res = client.post("/call", json={"tool": "camera_get_last_detection", "arguments": {"camera_id": "default"}})
+        assert res.status_code == 200
+        mock_manager.get_stream.assert_called_with("cam_0")
+
+    def test_call_camera_get_last_detection_resolves_alias_chinese(self, client_with_camera):
+        client, mock_manager, _ = client_with_camera
+        res = client.post("/call", json={"tool": "camera_get_last_detection", "arguments": {"camera_id": "门口"}})
+        assert res.status_code == 200
+        mock_manager.get_stream.assert_called_with("cam_0")
 
     # -----------------------------------------------------------------------
     # 5. Camera-disabled path
