@@ -101,11 +101,18 @@ class WebhookQueue:
         if self._worker_thread is not None:
             self._worker_thread.join(timeout=5.0)
 
-    def enqueue(self, camera_id: str, class_name: str, payload: dict[str, Any]) -> bool:
+    def enqueue(
+        self,
+        camera_id: str,
+        class_name: str,
+        payload: dict[str, Any],
+        confidence: float | None = None,
+    ) -> bool:
         if not self.webhook_url:
             return False
 
-        dedup_key = f"{camera_id}:{class_name}"
+        conf_bucket = f"{round(confidence, 1)}" if confidence is not None else "any"
+        dedup_key = f"{camera_id}:{class_name}:{conf_bucket}"
         now = time.time()
         with self._dedup_lock:
             cutoff = now - self.dedup_window_seconds

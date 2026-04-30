@@ -352,4 +352,6 @@ class CameraManager:
             "bbox": event.bbox,
             "class_name": event.class_name,
         }
-        self._webhook_queue.enqueue(event.camera_id, event.class_name, payload)
+        self._webhook_queue.enqueue(
+            event.camera_id, event.class_name, payload, confidence=event.confidence
+        )
