@@ -94,6 +94,15 @@ def _load_yolo_model(variant: str = "yolo26n"):
     return _YOLO_MODEL
 
 
+def _normalize_camera_id(camera_id: str | None) -> str | None:
+    """Normalize camera_id so numeric inputs like '0' become 'cam_0'."""
+    if camera_id is None:
+        return None
+    if isinstance(camera_id, str) and camera_id.isdigit():
+        return f"cam_{camera_id}"
+    return camera_id
+
+
 # ---------------------------------------------------------------------------
 # Tool schemas
 # ---------------------------------------------------------------------------
@@ -225,30 +234,31 @@ _MOCK_TOOL_SCHEMAS = [
     ),
     McpToolSchema(
         name="camera_list",
-        description="List available local cameras and their current status",
+        description="List available local cameras and their current status. Call this first to discover valid camera identifiers before using camera_get_frame or camera_get_last_detection.",
         parameters={
             "type": "object",
             "properties": {},
+            "required": [],
         },
     ),
     McpToolSchema(
         name="camera_get_frame",
-        description="Get the real-time frame from a specified camera as base64 JPEG",
+        description="Get the real-time frame from a specified camera as base64 JPEG. Use camera_list first to discover available cameras. camera_id accepts values like 'cam_0' or plain '0'.",
         parameters={
             "type": "object",
             "properties": {
-                "camera_id": {"type": "string", "description": "Camera identifier, e.g. cam_0"},
+                "camera_id": {"type": "string", "description": "Camera identifier, e.g. cam_0 or 0"},
             },
             "required": ["camera_id"],
         },
     ),
     McpToolSchema(
         name="camera_get_last_detection",
-        description="Get the most recent frame containing a detected person from a specified camera",
+        description="Get the most recent frame containing a detected person from a specified camera. Use camera_list first to discover available cameras. camera_id accepts values like 'cam_0' or plain '0'.",
         parameters={
             "type": "object",
             "properties": {
-                "camera_id": {"type": "string", "description": "Camera identifier, e.g. cam_0"},
+                "camera_id": {"type": "string", "description": "Camera identifier, e.g. cam_0 or 0"},
             },
             "required": ["camera_id"],
         },
@@ -502,7 +512,7 @@ def _camera_get_frame(args: dict[str, Any]) -> CallResponse:
             result=None,
             error={"code": "CAMERA_DISABLED", "message": "Camera manager not initialized"},
         )
-    camera_id = args.get("camera_id")
+    camera_id = _normalize_camera_id(args.get("camera_id"))
     stream = _CAMERA_MANAGER.get_stream(camera_id)
     if stream is None:
         # Auto-start if camera exists in discovery
@@ -560,7 +570,7 @@ def _camera_get_last_detection(args: dict[str, Any]) -> CallResponse:
             result=None,
             error={"code": "CAMERA_DISABLED", "message": "Camera manager not initialized"},
         )
-    camera_id = args.get("camera_id")
+    camera_id = _normalize_camera_id(args.get("camera_id"))
     stream = _CAMERA_MANAGER.get_stream(camera_id)
     if stream is None:
         return CallResponse(
