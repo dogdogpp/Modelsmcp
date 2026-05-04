@@ -1,5 +1,5 @@
 import { motion } from "motion/react";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import {
   Play,
   Upload,
@@ -17,6 +17,7 @@ import {
   Brain,
   AlertCircle,
   FileUp,
+  Activity,
 } from "lucide-react";
 import { models } from "../data/models";
 import { COCO_CLASSES } from "../data/cocoClasses";
@@ -200,8 +201,85 @@ function isNetworkError(msg: string): boolean {
   return networkPatterns.some((p) => msg.includes(p));
 }
 
+// ---------------------------------------------------------------------------
+// SSE helpers
+// ---------------------------------------------------------------------------
+
+type SseEventItem = { event: string; data: unknown; time: string };
+
+function parseSseBuffer(buffer: string): { events: SseEventItem[]; remainder: string } {
+  const parts = buffer.split("\n\n");
+  const remainder = parts.pop() || "";
+  const events: SseEventItem[] = [];
+  for (const part of parts) {
+    const lines = part.split("\n");
+    let event = "";
+    let data = "";
+    for (const line of lines) {
+      if (line.startsWith("event: ")) event = line.slice(7);
+      if (line.startsWith("data: ")) data = line.slice(6);
+    }
+    if (event) {
+      try {
+        events.push({ event, data: JSON.parse(data), time: new Date().toLocaleTimeString() });
+      } catch {
+        events.push({ event, data, time: new Date().toLocaleTimeString() });
+      }
+    }
+  }
+  return { events, remainder };
+}
+
+async function subscribeSse(
+  request: object,
+  apiKey: string,
+  onEvent: (item: SseEventItem) => void,
+  onError: (msg: string) => void,
+  signal: AbortSignal
+) {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (apiKey) headers["X-API-Key"] = apiKey;
+  try {
+    const res = await fetch(`${API_BASE_URL}/sse`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(request),
+      signal,
+    });
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({ detail: res.statusText }));
+      const detail =
+        typeof errData.detail === "string"
+          ? errData.detail
+          : JSON.stringify(errData.detail || errData);
+      throw new Error(detail || `HTTP ${res.status}`);
+    }
+    const reader = res.body!.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    while (true) {
+      if (signal.aborted) break;
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const { events, remainder } = parseSseBuffer(buffer);
+      buffer = remainder;
+      for (const evt of events) {
+        onEvent(evt);
+        if (evt.event === "result" || evt.event === "error") {
+          return;
+        }
+      }
+    }
+  } catch (err: any) {
+    if (err.name !== "AbortError") {
+      onError(err.message || String(err));
+    }
+  }
+}
+
 export function Playground() {
-  const [mode, setMode] = useState<"model" | "camera">("model");
+  const [mode, setMode] = useState<"model" | "camera" | "sse">("model");
   const [selectedModel, setSelectedModel] = useState(models[0]);
   const [isRunning, setIsRunning] = useState(false);
   const [result, setResult] = useState<object | null>(null);
@@ -210,6 +288,12 @@ export function Playground() {
   const [logs, setLogs] = useState<string[]>([]);
   const [apiKey, setApiKey] = useState(DEFAULT_API_KEY);
   const [useMockFallback, setUseMockFallback] = useState(false);
+
+  // SSE state
+  const [sseEvents, setSseEvents] = useState<SseEventItem[]>([]);
+  const [sseConnected, setSseConnected] = useState(false);
+  const [sseResult, setSseResult] = useState<object | null>(null);
+  const sseAbortRef = useRef<AbortController | null>(null);
 
   // Dynamic inputs
   const [imageUrl, setImageUrl] = useState("");
@@ -467,7 +551,68 @@ export function Playground() {
       clearInterval(recordingTimerRef.current);
       recordingTimerRef.current = null;
     }
+    // Reset SSE state
+    setSseEvents([]);
+    setSseResult(null);
+    if (sseAbortRef.current) {
+      sseAbortRef.current.abort();
+      sseAbortRef.current = null;
+    }
+    setSseConnected(false);
   };
+
+  // SSE handlers
+  const handleSseStart = useCallback(async () => {
+    setSseEvents([]);
+    setSseResult(null);
+    setSseConnected(true);
+    const abortCtrl = new AbortController();
+    sseAbortRef.current = abortCtrl;
+
+    const request = {
+      tool: selectedModel.mcpTool,
+      arguments: getInputs(),
+      stream_progress: true,
+    };
+
+    await subscribeSse(
+      request,
+      apiKey,
+      (item) => {
+        setSseEvents((prev) => [...prev, item]);
+        if (item.event === "result" || item.event === "error") {
+          setSseResult(item.data as object);
+          setSseConnected(false);
+        }
+      },
+      (msg) => {
+        setSseEvents((prev) => [
+          ...prev,
+          { event: "error", data: { message: msg }, time: new Date().toLocaleTimeString() },
+        ]);
+        setSseConnected(false);
+      },
+      abortCtrl.signal
+    );
+  }, [selectedModel, getInputs, apiKey]);
+
+  const handleSseStop = useCallback(() => {
+    if (sseAbortRef.current) {
+      sseAbortRef.current.abort();
+      sseAbortRef.current = null;
+    }
+    setSseConnected(false);
+  }, []);
+
+  // Cleanup SSE on unmount or mode change away from sse
+  useEffect(() => {
+    return () => {
+      if (sseAbortRef.current) {
+        sseAbortRef.current.abort();
+        sseAbortRef.current = null;
+      }
+    };
+  }, []);
 
   return (
     <div className="min-h-screen">
@@ -511,6 +656,18 @@ export function Playground() {
           >
             <Camera size={15} />
             实时摄像头
+          </button>
+          <button
+            onClick={() => setMode("sse")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm transition-all ${
+              mode === "sse"
+                ? "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20"
+                : "text-gray-400 hover:text-white hover:bg-white/5 border border-transparent"
+            }`}
+            style={{ fontWeight: 500 }}
+          >
+            <Activity size={15} />
+            SSE 流式测试
           </button>
         </div>
 
@@ -812,157 +969,287 @@ export function Playground() {
 
             {/* Actions */}
             <div className="flex gap-3">
-              <button
-                onClick={handleRun}
-                disabled={isRunning || selectedModel.status !== "online"}
-                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                style={{
-                  background: isRunning ? "#1a2030" : `linear-gradient(135deg, ${selectedModel.color}, ${selectedModel.color}99)`,
-                  fontWeight: 600,
-                }}
-              >
-                {isRunning ? (
-                  <><Loader2 size={16} className="animate-spin" /><span>推理中...</span></>
-                ) : (
-                  <><Play size={16} /><span>运行推理</span></>
-                )}
-              </button>
-              <button
-                onClick={handleReset}
-                className="p-3 rounded-xl border border-white/10 text-gray-400 hover:text-white hover:bg-white/5 transition-all"
-              >
-                <RotateCcw size={16} />
-              </button>
+              {mode === "model" ? (
+                <>
+                  <button
+                    onClick={handleRun}
+                    disabled={isRunning || selectedModel.status !== "online"}
+                    className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    style={{
+                      background: isRunning ? "#1a2030" : `linear-gradient(135deg, ${selectedModel.color}, ${selectedModel.color}99)`,
+                      fontWeight: 600,
+                    }}
+                  >
+                    {isRunning ? (
+                      <><Loader2 size={16} className="animate-spin" /><span>推理中...</span></>
+                    ) : (
+                      <><Play size={16} /><span>运行推理</span></>
+                    )}
+                  </button>
+                  <button
+                    onClick={handleReset}
+                    className="p-3 rounded-xl border border-white/10 text-gray-400 hover:text-white hover:bg-white/5 transition-all"
+                  >
+                    <RotateCcw size={16} />
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={handleSseStart}
+                    disabled={sseConnected || selectedModel.status !== "online"}
+                    className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    style={{
+                      background: sseConnected ? "#1a2030" : `linear-gradient(135deg, ${selectedModel.color}, ${selectedModel.color}99)`,
+                      fontWeight: 600,
+                    }}
+                  >
+                    {sseConnected ? (
+                      <><Loader2 size={16} className="animate-spin" /><span>订阅中...</span></>
+                    ) : (
+                      <><Activity size={16} /><span>开始 SSE 订阅</span></>
+                    )}
+                  </button>
+                  <button
+                    onClick={handleSseStop}
+                    disabled={!sseConnected}
+                    className="p-3 rounded-xl border border-white/10 text-gray-400 hover:text-white hover:bg-white/5 transition-all disabled:opacity-30"
+                  >
+                    <AlertCircle size={16} />
+                  </button>
+                </>
+              )}
             </div>
           </div>
 
           {/* Right panel - Results */}
           <div className="lg:col-span-3 space-y-5">
-            {/* MCP Request preview */}
-            <div className="rounded-2xl border border-white/5 bg-[#0d1117] overflow-hidden">
-              <div className="flex items-center justify-between px-4 py-3 border-b border-white/5 bg-white/[0.02]">
-                <div className="flex items-center gap-2">
-                  <Terminal size={13} className="text-cyan-400" />
-                  <span className="text-gray-400 text-xs" style={{ fontWeight: 500 }}>MCP 请求</span>
-                </div>
-                <div className="text-xs px-2 py-0.5 rounded-full" style={{ color: selectedModel.color, background: `${selectedModel.color}15` }}>
-                  {selectedModel.mcpTool}
-                </div>
-              </div>
-              <div className="p-4">
-                <pre className="text-xs font-mono text-gray-300 leading-relaxed overflow-x-auto">{mcpCallJson}</pre>
-              </div>
-            </div>
-
-            {/* Logs */}
-            {logs.length > 0 && (
-              <div className="rounded-2xl border border-white/5 bg-[#0d1117] overflow-hidden">
-                <div className="px-4 py-3 border-b border-white/5 bg-white/[0.02]">
-                  <span className="text-gray-400 text-xs" style={{ fontWeight: 500 }}>运行日志</span>
-                </div>
-                <div className="p-4 space-y-1.5">
-                  {logs.map((log, i) => (
-                    <div key={i} className="flex items-start gap-2">
-                      <div className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${
-                        log.includes("✓") ? "bg-green-400" : log.includes("⚠") ? "bg-amber-400" : "bg-cyan-400/50"
-                      }`} />
-                      <span className={`text-xs font-mono ${
-                        log.includes("✓") ? "text-green-400" : log.includes("⚠") ? "text-amber-400" : "text-gray-500"
-                      }`}>{log}</span>
-                    </div>
-                  ))}
-                  {isRunning && (
+            {mode === "sse" ? (
+              <>
+                {/* SSE Connection status */}
+                <div className="rounded-2xl border border-white/5 bg-[#0d1117] overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-white/5 bg-white/[0.02]">
                     <div className="flex items-center gap-2">
-                      <Loader2 size={12} className="text-cyan-400 animate-spin" />
-                      <span className="text-gray-600 text-xs font-mono">处理中...</span>
+                      <Activity size={13} className={sseConnected ? "text-green-400 animate-pulse" : "text-gray-500"} />
+                      <span className="text-gray-400 text-xs" style={{ fontWeight: 500 }}>SSE 连接状态</span>
                     </div>
-                  )}
+                    <div className={`text-xs px-2 py-0.5 rounded-full ${
+                      sseConnected
+                        ? "text-green-400 bg-green-400/10 border border-green-400/20"
+                        : "text-gray-500 bg-white/5 border border-white/10"
+                    }`}>
+                      {sseConnected ? "已连接" : "未连接"}
+                    </div>
+                  </div>
+                  <div className="p-4">
+                    <div className="text-xs font-mono text-gray-500">
+                      {sseConnected
+                        ? "正在订阅事件流..."
+                        : sseEvents.length > 0
+                        ? "连接已关闭"
+                        : "点击「开始 SSE 订阅」以启动流式推理"}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            )}
 
-            {/* Result */}
-            {result && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className={`rounded-2xl border overflow-hidden ${
-                  useMockFallback
-                    ? "border-amber-500/40 bg-amber-950/10"
-                    : "border-white/5 bg-[#0d1117]"
-                }`}
-              >
-                {useMockFallback && (
-                  <div className="px-4 py-2 border-b border-amber-500/20 bg-amber-500/10 flex items-center gap-2">
-                    <AlertCircle size={14} className="text-amber-400 shrink-0" />
-                    <span className="text-amber-300 text-xs" style={{ fontWeight: 600 }}>
-                      当前展示的是 Mock 数据，真实后端不可用或请求失败
-                    </span>
+                {/* SSE Event log */}
+                {sseEvents.length > 0 && (
+                  <div className="rounded-2xl border border-white/5 bg-[#0d1117] overflow-hidden">
+                    <div className="px-4 py-3 border-b border-white/5 bg-white/[0.02] flex items-center justify-between">
+                      <span className="text-gray-400 text-xs" style={{ fontWeight: 500 }}>事件流</span>
+                      <span className="text-gray-600 text-xs">{sseEvents.length} 个事件</span>
+                    </div>
+                    <div className="p-4 space-y-2 max-h-96 overflow-y-auto">
+                      {sseEvents.map((evt, i) => (
+                        <div key={i} className="rounded-lg border border-white/5 bg-white/[0.02] p-3">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
+                              evt.event === "progress"
+                                ? "bg-cyan-500/10 text-cyan-400"
+                                : evt.event === "result"
+                                ? "bg-green-500/10 text-green-400"
+                                : evt.event === "error"
+                                ? "bg-red-500/10 text-red-400"
+                                : "bg-gray-500/10 text-gray-400"
+                            }`}>
+                              {evt.event}
+                            </span>
+                            <span className="text-gray-600 text-[10px] font-mono">{evt.time}</span>
+                          </div>
+                          <pre className="text-[11px] font-mono text-gray-400 leading-relaxed whitespace-pre-wrap overflow-x-auto">
+                            {JSON.stringify(evt.data, null, 2)}
+                          </pre>
+                        </div>
+                      ))}
+                      {sseConnected && (
+                        <div className="flex items-center gap-2">
+                          <Loader2 size={12} className="text-cyan-400 animate-spin" />
+                          <span className="text-gray-600 text-xs font-mono">等待下一事件...</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
-                <div className="flex items-center justify-between px-4 py-3 border-b border-white/5 bg-white/[0.02]">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle size={13} className={useMockFallback ? "text-amber-400" : "text-green-400"} />
-                    <span className="text-gray-400 text-xs" style={{ fontWeight: 500 }}>推理结果</span>
-                    {useMockFallback && (
-                      <span className="text-amber-400 text-xs px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20">Mock</span>
-                    )}
-                  </div>
-                  <button
-                    onClick={handleCopy}
-                    className="flex items-center gap-1.5 text-gray-500 hover:text-white text-xs transition-colors"
-                  >
-                    {copied ? (
-                      <><CheckCircle size={12} className="text-green-400" /><span className="text-green-400">已复制</span></>
-                    ) : (
-                      <><Copy size={12} /><span>复制结果</span></>
-                    )}
-                  </button>
-                </div>
-                <div className="p-4 space-y-4">
-                  {/* Detection visualization */}
-                  {(() => {
-                    const res = result as Record<string, unknown>;
-                    const detections =
-                      (res.result as Record<string, unknown> | undefined)?.detections ||
-                      (res.result as Record<string, unknown> | undefined)?.persons ||
-                      (res as Record<string, unknown>).detections;
-                    const hasDetections = Array.isArray(detections) && detections.length > 0;
-                    const imgSrc = imagePreview || imageUrl;
-                    if (hasDetections && imgSrc) {
-                      return (
-                        <DetectionOverlay
-                          imageSrc={imgSrc}
-                          detections={detections as Array<Record<string, unknown>>}
-                        />
-                      );
-                    }
-                    return null;
-                  })()}
-                  <pre className="text-xs font-mono text-gray-300 leading-relaxed whitespace-pre-wrap max-h-80 overflow-y-auto">
-                    {JSON.stringify(result, null, 2)
-                      .split("\n")
-                      .map((line, i) => {
-                        let color = "text-gray-300";
-                        if (line.includes('"confidence"') || line.includes('"score"') || line.includes('"logit"') || line.includes('"similarity"')) color = "text-green-300";
-                        else if (line.includes('"class"') || line.includes('"text"') || line.includes('"phrase"') || line.includes('"label"') || line.includes('"word"')) color = "text-cyan-300";
-                        else if (line.includes('"inference_time"') || line.includes('"device"') || line.includes('"language"') || line.includes('"task"')) color = "text-amber-300";
-                        return <span key={i} className={`block ${color}`}>{line}</span>;
-                      })}
-                  </pre>
-                </div>
-              </motion.div>
-            )}
 
-            {/* Empty state */}
-            {!result && !isRunning && logs.length === 0 && (
-              <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.01] flex flex-col items-center justify-center py-16 text-center">
-                <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center mb-4">
-                  {primaryInput === "audio" ? <Mic size={20} className="text-gray-600" /> : <ImageIcon size={20} className="text-gray-600" />}
+                {/* SSE Final result */}
+                {sseResult && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="rounded-2xl border border-white/5 bg-[#0d1117] overflow-hidden"
+                  >
+                    <div className="flex items-center gap-2 px-4 py-3 border-b border-white/5 bg-white/[0.02]">
+                      <CheckCircle size={13} className="text-green-400" />
+                      <span className="text-gray-400 text-xs" style={{ fontWeight: 500 }}>最终结果</span>
+                    </div>
+                    <div className="p-4">
+                      <pre className="text-xs font-mono text-gray-300 leading-relaxed whitespace-pre-wrap max-h-80 overflow-y-auto">
+                        {JSON.stringify(sseResult, null, 2)}
+                      </pre>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* SSE Empty state */}
+                {sseEvents.length === 0 && !sseConnected && (
+                  <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.01] flex flex-col items-center justify-center py-16 text-center">
+                    <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center mb-4">
+                      <Activity size={20} className="text-gray-600" />
+                    </div>
+                    <p className="text-gray-500 text-sm">配置参数后点击「开始 SSE 订阅」</p>
+                    <p className="text-gray-600 text-xs mt-1">实时事件将在此处展示</p>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                {/* MCP Request preview */}
+                <div className="rounded-2xl border border-white/5 bg-[#0d1117] overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-white/5 bg-white/[0.02]">
+                    <div className="flex items-center gap-2">
+                      <Terminal size={13} className="text-cyan-400" />
+                      <span className="text-gray-400 text-xs" style={{ fontWeight: 500 }}>MCP 请求</span>
+                    </div>
+                    <div className="text-xs px-2 py-0.5 rounded-full" style={{ color: selectedModel.color, background: `${selectedModel.color}15` }}>
+                      {selectedModel.mcpTool}
+                    </div>
+                  </div>
+                  <div className="p-4">
+                    <pre className="text-xs font-mono text-gray-300 leading-relaxed overflow-x-auto">{mcpCallJson}</pre>
+                  </div>
                 </div>
-                <p className="text-gray-500 text-sm">配置参数后点击「运行推理」</p>
-                <p className="text-gray-600 text-xs mt-1">结果将在此处展示</p>
-              </div>
+
+                {/* Logs */}
+                {logs.length > 0 && (
+                  <div className="rounded-2xl border border-white/5 bg-[#0d1117] overflow-hidden">
+                    <div className="px-4 py-3 border-b border-white/5 bg-white/[0.02]">
+                      <span className="text-gray-400 text-xs" style={{ fontWeight: 500 }}>运行日志</span>
+                    </div>
+                    <div className="p-4 space-y-1.5">
+                      {logs.map((log, i) => (
+                        <div key={i} className="flex items-start gap-2">
+                          <div className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${
+                            log.includes("✓") ? "bg-green-400" : log.includes("⚠") ? "bg-amber-400" : "bg-cyan-400/50"
+                          }`} />
+                          <span className={`text-xs font-mono ${
+                            log.includes("✓") ? "text-green-400" : log.includes("⚠") ? "text-amber-400" : "text-gray-500"
+                          }`}>{log}</span>
+                        </div>
+                      ))}
+                      {isRunning && (
+                        <div className="flex items-center gap-2">
+                          <Loader2 size={12} className="text-cyan-400 animate-spin" />
+                          <span className="text-gray-600 text-xs font-mono">处理中...</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Result */}
+                {result && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className={`rounded-2xl border overflow-hidden ${
+                      useMockFallback
+                        ? "border-amber-500/40 bg-amber-950/10"
+                        : "border-white/5 bg-[#0d1117]"
+                    }`}
+                  >
+                    {useMockFallback && (
+                      <div className="px-4 py-2 border-b border-amber-500/20 bg-amber-500/10 flex items-center gap-2">
+                        <AlertCircle size={14} className="text-amber-400 shrink-0" />
+                        <span className="text-amber-300 text-xs" style={{ fontWeight: 600 }}>
+                          当前展示的是 Mock 数据，真实后端不可用或请求失败
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-white/5 bg-white/[0.02]">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle size={13} className={useMockFallback ? "text-amber-400" : "text-green-400"} />
+                        <span className="text-gray-400 text-xs" style={{ fontWeight: 500 }}>推理结果</span>
+                        {useMockFallback && (
+                          <span className="text-amber-400 text-xs px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20">Mock</span>
+                        )}
+                      </div>
+                      <button
+                        onClick={handleCopy}
+                        className="flex items-center gap-1.5 text-gray-500 hover:text-white text-xs transition-colors"
+                      >
+                        {copied ? (
+                          <><CheckCircle size={12} className="text-green-400" /><span className="text-green-400">已复制</span></>
+                        ) : (
+                          <><Copy size={12} /><span>复制结果</span></>
+                        )}
+                      </button>
+                    </div>
+                    <div className="p-4 space-y-4">
+                      {/* Detection visualization */}
+                      {(() => {
+                        const res = result as Record<string, unknown>;
+                        const detections =
+                          (res.result as Record<string, unknown> | undefined)?.detections ||
+                          (res.result as Record<string, unknown> | undefined)?.persons ||
+                          (res as Record<string, unknown>).detections;
+                        const hasDetections = Array.isArray(detections) && detections.length > 0;
+                        const imgSrc = imagePreview || imageUrl;
+                        if (hasDetections && imgSrc) {
+                          return (
+                            <DetectionOverlay
+                              imageSrc={imgSrc}
+                              detections={detections as Array<Record<string, unknown>>}
+                            />
+                          );
+                        }
+                        return null;
+                      })()}
+                      <pre className="text-xs font-mono text-gray-300 leading-relaxed whitespace-pre-wrap max-h-80 overflow-y-auto">
+                        {JSON.stringify(result, null, 2)
+                          .split("\n")
+                          .map((line, i) => {
+                            let color = "text-gray-300";
+                            if (line.includes('"confidence"') || line.includes('"score"') || line.includes('"logit"') || line.includes('"similarity"')) color = "text-green-300";
+                            else if (line.includes('"class"') || line.includes('"text"') || line.includes('"phrase"') || line.includes('"label"') || line.includes('"word"')) color = "text-cyan-300";
+                            else if (line.includes('"inference_time"') || line.includes('"device"') || line.includes('"language"') || line.includes('"task"')) color = "text-amber-300";
+                            return <span key={i} className={`block ${color}`}>{line}</span>;
+                          })}
+                      </pre>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* Empty state */}
+                {!result && !isRunning && logs.length === 0 && (
+                  <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.01] flex flex-col items-center justify-center py-16 text-center">
+                    <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center mb-4">
+                      {primaryInput === "audio" ? <Mic size={20} className="text-gray-600" /> : <ImageIcon size={20} className="text-gray-600" />}
+                    </div>
+                    <p className="text-gray-500 text-sm">配置参数后点击「运行推理」</p>
+                    <p className="text-gray-600 text-xs mt-1">结果将在此处展示</p>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>

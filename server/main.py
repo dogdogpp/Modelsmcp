@@ -18,7 +18,7 @@ from contextlib import asynccontextmanager
 import base64
 import json
 
-from fastapi import FastAPI, File, Form, HTTPException, Depends, Security, UploadFile, WebSocket, WebSocketDisconnect, Query, Body
+from fastapi import FastAPI, File, Form, HTTPException, Depends, Security, UploadFile, WebSocket, WebSocketDisconnect, Query, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.security.api_key import APIKeyHeader
@@ -31,8 +31,8 @@ from config import (
     WEBHOOK_DEDUP_WINDOW_SECONDS, WEBHOOK_DB_PATH,
     WEBHOOK_BACKOFF_BASE_SECONDS,
 )
-from mcp.server import init_tools, get_tools, call_tool, get_health, get_metrics
-from mcp.protocol import CallRequest
+from mcp.server import init_tools, get_tools, call_tool, call_tool_stream, get_health, get_metrics
+from mcp.protocol import CallRequest, SseCallRequest, format_sse
 from camera import CameraManager
 from webhook import WebhookQueue
 from mcp.server import set_webhook_queue
@@ -138,6 +138,73 @@ def call(request: CallRequest):
     if response.status == "error":
         raise HTTPException(status_code=400, detail=response.error)
     return response
+
+
+@app.post("/sse", dependencies=[Depends(verify_api_key)])
+async def sse_call(request: SseCallRequest, raw_request: Request):
+    """Stream tool execution results via Server-Sent Events.
+
+    Emits ``progress`` events during inference, followed by either a
+    ``result`` or ``error`` event. Heartbeats are sent every 15 s to keep
+    the connection alive for long-running operations.
+    """
+    queue: asyncio.Queue[str | None] = asyncio.Queue()
+
+    async def producer():
+        try:
+            async for event_dict in call_tool_stream(
+                CallRequest(tool=request.tool, arguments=request.arguments)
+            ):
+                await queue.put(format_sse(event_dict["event"], event_dict["data"]))
+                if event_dict["event"] in ("result", "error"):
+                    break
+        except Exception as e:
+            await queue.put(format_sse("error", {"code": "STREAM_ERROR", "message": str(e)}))
+        finally:
+            await queue.put(None)  # sentinel to signal completion
+
+    async def heartbeat():
+        try:
+            while True:
+                await asyncio.sleep(15)
+                await queue.put(format_sse("heartbeat", {}))
+        except asyncio.CancelledError:
+            pass
+
+    producer_task = asyncio.create_task(producer())
+    heartbeat_task = asyncio.create_task(heartbeat())
+
+    async def consumer():
+        try:
+            while True:
+                # Check for client disconnect every queue poll
+                if await raw_request.is_disconnected():
+                    break
+                item = await queue.get()
+                if item is None:
+                    break
+                yield item
+        finally:
+            producer_task.cancel()
+            heartbeat_task.cancel()
+            try:
+                await producer_task
+            except asyncio.CancelledError:
+                pass
+            try:
+                await heartbeat_task
+            except asyncio.CancelledError:
+                pass
+
+    return StreamingResponse(
+        consumer(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 # Security: Limit uploaded file size to prevent OOM (16 MB).

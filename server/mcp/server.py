@@ -1,11 +1,12 @@
 """MCP Server logic and tool registry."""
 
+import asyncio
 import base64
 import io
 import threading
 import time
 import random
-from typing import Any, Callable
+from typing import Any, AsyncGenerator, Callable
 from pathlib import Path
 
 from PIL import Image
@@ -20,6 +21,9 @@ from .protocol import (
     HealthModelInfo,
     MetricsResponse,
     MetricsDataPoint,
+    SseProgressData,
+    SseResultData,
+    SseErrorData,
 )
 
 # Tool registry: name -> handler
@@ -73,6 +77,77 @@ def call_tool(request: CallRequest) -> CallResponse:
             result=None,
             error={"code": "INFERENCE_ERROR", "message": str(e)},
         )
+
+
+# Tool-specific progress messages for SSE streaming
+_TOOL_PROGRESS_STEPS: dict[str, list[str]] = {
+    "yolo26_detect": ["正在加载 YOLO 模型...", "执行目标检测...", "解析检测结果..."],
+    "detr_detect": ["正在加载 DETR 模型...", "执行 Transformer 检测...", "解析检测结果..."],
+    "paddleocr_recognize": ["正在加载 PaddleOCR 模型...", "执行文本识别...", "整理识别结果..."],
+    "sam2_segment": ["正在加载 SAM2 模型...", "执行图像分割...", "生成分割掩码..."],
+    "clip_encode": ["正在加载 CLIP 模型...", "执行图像-文本编码...", "计算相似度..."],
+    "whisper_transcribe": ["正在加载 Whisper 模型...", "预处理音频...", "执行语音转录...", "后处理结果..."],
+    "depth_estimate": ["正在加载 Depth 模型...", "执行深度估计...", "生成深度图..."],
+    "dinov2_embed": ["正在加载 DINOv2 模型...", "执行特征提取...", "归一化嵌入向量..."],
+    "pose_estimate": ["正在加载 Pose 模型...", "执行人体姿态估计...", "解析关键点..."],
+    "grounding_dino_detect": ["正在加载 Grounding DINO 模型...", "执行开放词汇检测...", "解析检测结果..."],
+    "camera_list": ["正在发现可用摄像头...", "获取摄像头状态..."],
+    "camera_get_frame": ["正在连接摄像头...", "获取视频帧...", "编码图像..."],
+    "camera_get_last_detection": ["正在查询检测历史...", "获取最新检测帧...", "编码图像..."],
+}
+
+
+async def call_tool_stream(request: CallRequest) -> AsyncGenerator[dict[str, Any], None]:
+    """Async generator that yields SSE event dicts for a tool call.
+
+    Yields:
+        dicts with keys ``event`` ("progress" | "result" | "error") and ``data``.
+    """
+    handler = _TOOL_HANDLERS.get(request.tool)
+    if not handler:
+        yield {
+            "event": "error",
+            "data": {"code": "TOOL_NOT_FOUND", "message": f"Tool '{request.tool}' not found"},
+        }
+        return
+
+    steps = _TOOL_PROGRESS_STEPS.get(request.tool, ["正在初始化推理引擎...", "执行推理...", "处理结果..."])
+    total_steps = len(steps) + 1
+
+    # Emit initial progress
+    yield {
+        "event": "progress",
+        "data": {"message": steps[0], "step": 1, "total_steps": total_steps},
+    }
+
+    # Run the synchronous handler in a thread pool so the event loop stays free
+    try:
+        response: CallResponse = await asyncio.to_thread(call_tool, request)
+    except Exception as e:
+        yield {
+            "event": "error",
+            "data": {"code": "INFERENCE_ERROR", "message": str(e)},
+        }
+        return
+
+    # Emit intermediate progress steps (quickly, for visual feedback)
+    for idx, msg in enumerate(steps[1:], start=2):
+        yield {
+            "event": "progress",
+            "data": {"message": msg, "step": idx, "total_steps": total_steps},
+        }
+        await asyncio.sleep(0.01)
+
+    # Final progress
+    yield {
+        "event": "progress",
+        "data": {"message": "推理完成", "step": total_steps, "total_steps": total_steps},
+    }
+
+    if response.status == "error":
+        yield {"event": "error", "data": response.error}
+    else:
+        yield {"event": "result", "data": response}
 
 
 # ---------------------------------------------------------------------------
