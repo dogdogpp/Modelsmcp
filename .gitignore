@@ -15,6 +15,7 @@ __pycache__/
 *.pth
 *.ckpt
 *.safetensors
+!models_storage/*.pt
 
 # Logs
 *.log

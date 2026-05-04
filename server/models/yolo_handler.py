@@ -38,7 +38,7 @@ class YOLOHandler:
         if self._model is not None and self._model_size == size:
             return self._model
 
-        weights_dir = os.path.join(os.path.dirname(__file__), "..", "..", "yolo2026")
+        weights_dir = os.path.join(os.path.dirname(__file__), "..", "..", "models_storage")
         weights_path = os.path.join(weights_dir, f"yolo26{size}.pt")
 
         if os.path.exists(weights_path):
@@ -47,8 +47,7 @@ class YOLOHandler:
             # Auto-download via ultralytics
             self._model = YOLO(f"yolo26{size}.pt")
             # Save to local weights dir for reuse
-            if not os.path.exists(weights_dir):
-                os.makedirs(weights_dir, exist_ok=True)
+            os.makedirs(weights_dir, exist_ok=True)
 
         self._model_size = size
         return self._model
