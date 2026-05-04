@@ -1,7 +1,9 @@
 import os
+import shutil
 import base64
 import tempfile
 import time
+from pathlib import Path
 from typing import Dict, Any
 from urllib.parse import urlparse
 import urllib.request
@@ -38,17 +40,18 @@ class YOLOHandler:
         if self._model is not None and self._model_size == size:
             return self._model
 
-        weights_dir = os.path.join(os.path.dirname(__file__), "..", "..", "yolo2026")
-        weights_path = os.path.join(weights_dir, f"yolo26{size}.pt")
+        weights_dir = Path(__file__).resolve().parent.parent.parent / "models_storage"
+        weights_path = weights_dir / f"yolo26{size}.pt"
 
-        if os.path.exists(weights_path):
-            self._model = YOLO(weights_path)
+        if weights_path.exists():
+            self._model = YOLO(str(weights_path))
         else:
-            # Auto-download via ultralytics
+            # Auto-download via ultralytics; ensure it lands in models_storage
+            weights_dir.mkdir(parents=True, exist_ok=True)
             self._model = YOLO(f"yolo26{size}.pt")
-            # Save to local weights dir for reuse
-            if not os.path.exists(weights_dir):
-                os.makedirs(weights_dir, exist_ok=True)
+            cwd_file = Path(f"yolo26{size}.pt")
+            if cwd_file.exists():
+                shutil.move(str(cwd_file), str(weights_path))
 
         self._model_size = size
         return self._model

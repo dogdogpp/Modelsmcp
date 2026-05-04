@@ -173,7 +173,17 @@ def _load_yolo_model(variant: str = "yolo26n"):
     global _YOLO_MODEL
     if _YOLO_MODEL is None:
         from ultralytics import YOLO
-        _YOLO_MODEL = YOLO(f"{variant}.pt")
+        models_dir = Path(__file__).resolve().parent.parent.parent / "models_storage"
+        weights_path = models_dir / f"{variant}.pt"
+        if weights_path.exists():
+            _YOLO_MODEL = YOLO(str(weights_path))
+        else:
+            models_dir.mkdir(parents=True, exist_ok=True)
+            _YOLO_MODEL = YOLO(f"{variant}.pt")
+            cwd_file = Path(f"{variant}.pt")
+            if cwd_file.exists():
+                import shutil
+                shutil.move(str(cwd_file), str(weights_path))
     return _YOLO_MODEL
 
 
