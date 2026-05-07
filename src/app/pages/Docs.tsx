@@ -447,7 +447,7 @@ webhooks:
       - inference.failed
       - model.loaded
     headers:
-      Authorization: "Bearer ${OPENCLAW_WEBHOOK_TOKEN}"
+      Authorization: "Bearer \${OPENCLAW_WEBHOOK_TOKEN}"
     retry: 3
     timeout: 10s`}
                   />
