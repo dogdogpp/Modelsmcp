@@ -20,6 +20,7 @@ const sections = [
   { id: "config", label: "配置参考" },
   { id: "claude", label: "接入 Claude" },
   { id: "openclaw", label: "接入 OpenClaw" },
+  { id: "openclaw-bidirectional", label: "OpenClaw 双向订阅" },
   { id: "local-deploy", label: "本地部署" },
   { id: "faq", label: "常见问题" },
 ];
@@ -396,6 +397,271 @@ mcp_servers:
       type: none
     timeout: 60`}
               />
+            </section>
+
+            {/* OpenClaw Bidirectional Pub/Sub */}
+            <section id="openclaw-bidirectional">
+              <h2 className="text-white mb-4" style={{ fontSize: "1.5rem", fontWeight: 700 }}>OpenClaw 双向订阅通信</h2>
+              <p className="text-gray-400 leading-relaxed mb-4">
+                标准的 MCP 调用是单向请求-响应模式：OpenClaw 请求 → DeepMCP 推理 → 返回结果。
+                在异步任务、流式推理、事件通知等场景下，需要建立<strong>双向订阅通道</strong>，让 DeepMCP 也能主动向 OpenClaw 推送消息。
+              </p>
+
+              <div className="p-4 rounded-xl border border-cyan-500/20 bg-cyan-500/5 mb-6">
+                <div className="flex items-start gap-3">
+                  <Server size={18} className="text-cyan-400 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-cyan-300 text-sm font-medium mb-1">通信架构概览</p>
+                    <p className="text-gray-400 text-sm leading-relaxed">
+                      双向订阅 = OpenClaw → DeepMCP（命令/调用）+ DeepMCP → OpenClaw（事件/通知）。
+                      两条通道可独立工作，也可组合成闭环：OpenClaw 下发任务，DeepMCP 异步完成后主动回传结果。
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-8">
+                {/* Pattern 1: Webhook */}
+                <div>
+                  <h3 className="text-white mb-3 flex items-center gap-2" style={{ fontWeight: 600 }}>
+                    <span className="w-6 h-6 rounded-full bg-cyan-500/20 text-cyan-400 text-xs flex items-center justify-center" style={{ fontWeight: 700 }}>1</span>
+                    Webhook 回调模式（最简单）
+                  </h3>
+                  <p className="text-gray-400 text-sm leading-relaxed mb-3">
+                    DeepMCP 在推理完成或状态变更时，通过 HTTP POST 向 OpenClaw 的 webhook 端点推送事件。
+                    适用于：异步任务完成通知、批量推理结果回传、异常告警。
+                  </p>
+                  <CodeBlock
+                    copyKey="webhook-yaml"
+                    lang="yaml"
+                    code={`# deepmcp.config.yaml — 启用 webhook 推送
+webhooks:
+  openclaw:
+    url: "http://localhost:3000/hooks/agent"
+    events:
+      - inference.complete
+      - inference.failed
+      - model.loaded
+    headers:
+      Authorization: "Bearer ${OPENCLAW_WEBHOOK_TOKEN}"
+    retry: 3
+    timeout: 10s`}
+                  />
+                  <CodeBlock
+                    copyKey="webhook-payload"
+                    lang="json"
+                    code={`// DeepMCP → OpenClaw 推送示例
+{
+  "event": "inference.complete",
+  "timestamp": "2026-05-07T12:34:56Z",
+  "task_id": "task_abc123",
+  "tool": "yolov8_detect",
+  "result": {
+    "detections": [{"class": "person", "confidence": 0.94, "bbox": [120, 80, 280, 420]}],
+    "inference_time_ms": 12,
+    "device": "cuda"
+  }
+}`}
+                  />
+                </div>
+
+                {/* Pattern 2: WebSocket */}
+                <div>
+                  <h3 className="text-white mb-3 flex items-center gap-2" style={{ fontWeight: 600 }}>
+                    <span className="w-6 h-6 rounded-full bg-cyan-500/20 text-cyan-400 text-xs flex items-center justify-center" style={{ fontWeight: 700 }}>2</span>
+                    WebSocket 全双工模式（实时性最强）
+                  </h3>
+                  <p className="text-gray-400 text-sm leading-relaxed mb-3">
+                    建立持久化 WebSocket 连接，双方均可随时发送消息。
+                    适用于：实时视频流推理、交互式分割、语音对话场景。
+                  </p>
+                  <CodeBlock
+                    copyKey="websocket-server"
+                    lang="python"
+                    code={`# DeepMCP WebSocket 服务端片段 (FastAPI)
+from fastapi import FastAPI, WebSocket
+import json
+
+app = FastAPI()
+
+@app.websocket("/ws/openclaw")
+async def openclaw_ws(websocket: WebSocket):
+    await websocket.accept()
+    try:
+        while True:
+            msg = await websocket.receive_json()
+            # msg: { "action": "infer", "tool": "yolov8_detect", "args": {...} }
+            result = await run_inference(msg["tool"], msg["args"])
+            await websocket.send_json({
+                "type": "result",
+                "task_id": msg.get("task_id"),
+                "data": result
+            })
+    except Exception as e:
+        await websocket.send_json({"type": "error", "message": str(e)})
+    finally:
+        await websocket.close()`}
+                  />
+                  <CodeBlock
+                    copyKey="websocket-client"
+                    lang="python"
+                    code={`# OpenClaw 侧 WebSocket 客户端片段
+import asyncio
+import websockets
+import json
+
+async def deepmcp_bridge():
+    uri = "ws://localhost:8080/ws/openclaw"
+    async with websockets.connect(uri) as ws:
+        # 发送推理请求
+        await ws.send(json.dumps({
+            "task_id": "task_001",
+            "tool": "sam2_segment",
+            "args": {"image": "frame_42.jpg", "prompts": [{"x": 320, "y": 240}]}
+        }))
+        # 实时接收结果/进度
+        async for message in ws:
+            data = json.loads(message)
+            if data["type"] == "progress":
+                print(f"进度: {data['percent']}%")
+            elif data["type"] == "result":
+                print(f"结果: {data['data']}")`}
+                  />
+                </div>
+
+                {/* Pattern 3: SSE */}
+                <div>
+                  <h3 className="text-white mb-3 flex items-center gap-2" style={{ fontWeight: 600 }}>
+                    <span className="w-6 h-6 rounded-full bg-cyan-500/20 text-cyan-400 text-xs flex items-center justify-center" style={{ fontWeight: 700 }}>3</span>
+                    SSE 流式推送模式（轻量单向流）
+                  </h3>
+                  <p className="text-gray-400 text-sm leading-relaxed mb-3">
+                    Server-Sent Events 基于 HTTP，自动重连，浏览器原生支持。
+                    适用于：逐 token 返回 OCR 结果、视频推理进度条、长耗时任务状态流。
+                  </p>
+                  <CodeBlock
+                    copyKey="sse-server"
+                    lang="python"
+                    code={`# DeepMCP SSE 端点
+from fastapi import FastAPI
+from fastapi.responses import StreamingResponse
+import asyncio
+
+app = FastAPI()
+
+async def inference_stream(tool: str, args: dict):
+    """逐步 yield 推理进度与最终结果"""
+    yield f"data: {{\\"type\\": \\"start\\", \\"tool\\": \\"{tool}\\"}}\\n\\n"
+    for percent in range(0, 101, 10):
+        await asyncio.sleep(0.1)
+        yield f"data: {{\\"type\\": \\"progress\\", \\"percent\\": {percent}}}\\n\\n"
+    result = await run_inference(tool, args)
+    yield f"data: {{\\"type\\": \\"complete\\", \\"result\\": {json.dumps(result)}}}\\n\\n"
+
+@app.get("/stream/infer")
+def stream_infer(tool: str, image: str):
+    return StreamingResponse(
+        inference_stream(tool, {"image": image}),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+    )`}
+                  />
+                  <CodeBlock
+                    copyKey="sse-client"
+                    lang="javascript"
+                    code={`// OpenClaw / 浏览器端订阅
+const es = new EventSource("http://localhost:8080/stream/infer?tool=whisper_transcribe&audio=call.wav");
+
+es.onmessage = (e) => {
+  const data = JSON.parse(e.data);
+  if (data.type === "progress") updateProgressBar(data.percent);
+  if (data.type === "complete") { handleResult(data.result); es.close(); }
+};
+
+es.onerror = () => console.error("SSE 连接中断，浏览器会自动重连");`}
+                  />
+                </div>
+
+                {/* Pattern 4: Message Broker */}
+                <div>
+                  <h3 className="text-white mb-3 flex items-center gap-2" style={{ fontWeight: 600 }}>
+                    <span className="w-6 h-6 rounded-full bg-cyan-500/20 text-cyan-400 text-xs flex items-center justify-center" style={{ fontWeight: 700 }}>4</span>
+                    消息代理解耦模式（生产级）
+                  </h3>
+                  <p className="text-gray-400 text-sm leading-relaxed mb-3">
+                    引入 Redis/RabbitMQ 作为中间层，DeepMCP 与 OpenClaw 互不直接依赖，天然支持削峰、重试、多实例消费。
+                    适用于：高并发推理队列、多 OpenClaw 实例共享 DeepMCP 集群、任务持久化。
+                  </p>
+                  <CodeBlock
+                    copyKey="broker-redis"
+                    lang="yaml"
+                    code={`# deepmcp.config.yaml — Redis Pub/Sub 配置
+broker:
+  type: redis
+  url: redis://localhost:6379/0
+  channels:
+    requests: "deepmcp:requests"      # OpenClaw 发布 → DeepMCP 订阅
+    responses: "deepmcp:responses"    # DeepMCP 发布 → OpenClaw 订阅
+    events: "deepmcp:events"          # 广播事件（模型加载、异常等）`}
+                  />
+                  <CodeBlock
+                    copyKey="broker-pubsub"
+                    lang="python"
+                    code={`# DeepMCP Redis 双向订阅示例
+import redis
+import json
+import asyncio
+
+r = redis.Redis.from_url("redis://localhost:6379/0")
+ps = r.pubsub()
+ps.subscribe("deepmcp:requests")
+
+async def handle_requests():
+    for message in ps.listen():
+        if message["type"] != "message":
+            continue
+        task = json.loads(message["data"])
+        # 执行推理
+        result = await run_inference(task["tool"], task["args"])
+        # 将结果发布到响应频道
+        r.publish("deepmcp:responses", json.dumps({
+            "task_id": task["task_id"],
+            "result": result
+        }))`}
+                  />
+                  <CodeBlock
+                    copyKey="broker-openclaw"
+                    lang="python"
+                    code={`# OpenClaw 侧 Redis 消费者示例
+import redis
+import json
+
+r = redis.Redis.from_url("redis://localhost:6379/0")
+ps = r.pubsub()
+ps.subscribe("deepmcp:responses", "deepmcp:events")
+
+for message in ps.listen():
+    if message["type"] != "message":
+        continue
+    data = json.loads(message["data"])
+    channel = message["channel"].decode()
+    if channel == "deepmcp:responses":
+        print(f"任务 {data['task_id']} 完成: {data['result']}")
+    elif channel == "deepmcp:events":
+        print(f"事件: {data['event']} — {data.get('detail', '')}")`}
+                  />
+                </div>
+              </div>
+
+              <div className="mt-8 p-4 rounded-xl border border-amber-500/20 bg-amber-500/5">
+                <p className="text-amber-300 text-sm font-medium mb-2">选型建议</p>
+                <ul className="text-gray-400 text-sm space-y-1 list-disc list-inside">
+                  <li><strong>快速验证</strong>：先用 Webhook，10 分钟搭通闭环。</li>
+                  <li><strong>实时交互</strong>：WebSocket，延迟最低，支持双向任意时刻发消息。</li>
+                  <li><strong>浏览器/轻量场景</strong>：SSE，无需额外库，自动断线重连。</li>
+                  <li><strong>生产部署</strong>：Redis/RabbitMQ 消息代理，解耦、削峰、可横向扩展。</li>
+                </ul>
+              </div>
             </section>
 
             {/* Local Deploy */}
