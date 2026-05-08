@@ -26,7 +26,7 @@ const sections = [
 ];
 
 const tools = [
-  { name: "yolov8_detect", desc: "YOLOv8 目标检测", params: ["image", "confidence", "classes", "model_size"] },
+  { name: "yolo26_detect", desc: "YOLO2026 目标检测", params: ["image", "confidence", "classes", "model_size"] },
   { name: "detr_detect", desc: "DETR Transformer 检测", params: ["image", "threshold", "return_masks"] },
   { name: "paddleocr_recognize", desc: "PaddleOCR 文字识别", params: ["image", "lang", "use_angle_cls", "det", "rec"] },
   { name: "sam2_segment", desc: "SAM 2 图像/视频分割", params: ["image", "prompts", "multimask_output"] },
@@ -187,7 +187,7 @@ pipx install deepmcp`}
 deepmcp pull --all
 
 # 下载单个模型
-deepmcp pull yolov8 paddleocr
+deepmcp pull yolo26 paddleocr
 
 # 启动 MCP 服务（默认端口 8080）
 deepmcp serve --gpu
@@ -210,7 +210,7 @@ curl http://localhost:8080/tools
 # 测试推理
 curl -X POST http://localhost:8080/call \\
   -H "Content-Type: application/json" \\
-  -d '{"tool": "yolov8_detect", "arguments": {"image": "https://example.com/img.jpg"}}'`}
+  -d '{"tool": "yolo26_detect", "arguments": {"image": "https://example.com/img.jpg"}}'`}
                   />
                 </div>
               </div>
@@ -253,7 +253,7 @@ curl -X POST http://localhost:8080/call \\
 Content-Type: application/json
 
 {
-  "tool": "yolov8_detect",
+  "tool": "yolo26_detect",
   "arguments": {
     "image": "https://example.com/photo.jpg",
     "confidence": 0.5,
@@ -269,7 +269,7 @@ Content-Type: application/json
                 lang="json"
                 code={`{
   "status": "success",
-  "model": "yolov8",
+  "model": "yolo26",
   "inference_time": "12ms",
   "device": "CUDA",
   "result": {
@@ -328,9 +328,9 @@ inference:
   timeout: 30s
 
 models:
-  yolov8:
+  yolo26:
     enabled: true
-    variant: "yolov8m"    # n/s/m/l/x
+    variant: "yolo26m"    # n/s/m/l/x
     weights: "auto"       # auto download or local path
   paddleocr:
     enabled: true
@@ -366,7 +366,7 @@ security:
       "command": "deepmcp",
       "args": ["serve", "--port", "8080", "--device", "cuda"],
       "env": {
-        "DEEPMCP_MODELS": "yolov8,paddleocr,sam2,whisper"
+        "DEEPMCP_MODELS": "yolo26,paddleocr,sam2,whisper"
       }
     }
   }
@@ -389,7 +389,7 @@ mcp_servers:
     transport: "http"
     url: "http://localhost:8080/mcp"
     tools:
-      - yolov8_detect
+      - yolo26_detect
       - paddleocr_recognize
       - sam2_segment
       - whisper_transcribe
@@ -441,7 +441,7 @@ deepmcp serve --port 8080
 
 # 看到类似输出就说明成功了
 # INFO  DeepMCP ready at http://0.0.0.0:8080
-# INFO  Loaded tools: yolov8_detect, paddleocr_recognize, sam2_segment`} />
+# INFO  Loaded tools: yolo26_detect, paddleocr_recognize, sam2_segment`} />
                     </div>
                     <div className="p-4 rounded-xl border border-white/5 bg-white/[0.02]">
                       <div className="text-white text-sm font-medium mb-2">启动 OpenClaw（AI 老板）</div>
@@ -494,7 +494,7 @@ openclaw gateway
 
               // 启用哪些工具（白名单）
               tools: [
-                "yolov8_detect",
+                "yolo26_detect",
                 "paddleocr_recognize",
                 "sam2_segment",
                 "whisper_transcribe"
@@ -523,7 +523,7 @@ openclaw gateway`} />
                   <div className="mb-3">
                     <p className="text-white text-sm font-medium mb-2">验证是否连通</p>
                     <p className="text-gray-500 text-xs mb-2">在 OpenClaw 的任意聊天窗口发消息：</p>
-                    <CodeBlock copyKey="step2-test" lang="text" code={`请用 yolov8_detect 工具分析这张照片里有多少人
+                    <CodeBlock copyKey="step2-test" lang="text" code={`请用 yolo26_detect 工具分析这张照片里有多少人
 [附上一张照片]`} />
                   </div>
 
@@ -647,7 +647,7 @@ openclaw gateway`} />
 
                     <div className="p-3 rounded-lg border border-white/5 bg-white/[0.02]">
                       <p className="text-cyan-300 text-xs font-medium mb-1">第 2 步：专家收到任务</p>
-                      <p className="text-gray-400 text-xs">OpenClaw 自动调用 DeepMCP 的 <code className="text-cyan-300">yolov8_detect</code> 工具，把照片传过去。</p>
+                      <p className="text-gray-400 text-xs">OpenClaw 自动调用 DeepMCP 的 <code className="text-cyan-300">yolo26_detect</code> 工具，把照片传过去。</p>
                     </div>
 
                     <div className="p-3 rounded-lg border border-white/5 bg-white/[0.02]">
@@ -656,7 +656,7 @@ openclaw gateway`} />
                       <CodeBlock copyKey="step4-payload" lang="json" code={`{
   "event": "inference.complete",
   "task_id": "task_001",
-  "tool": "yolov8_detect",
+  "tool": "yolo26_detect",
   "result": {
     "detections": [
       { "class": "person", "confidence": 0.94, "bbox": [120, 80, 280, 420] },
@@ -700,7 +700,7 @@ openclaw gateway`} />
 
         // 调用 DeepMCP 检测工具
         action: {
-          tool: "yolov8_detect",
+          tool: "yolo26_detect",
           args: {
             image: "http://camera.local/current.jpg",
             classes: ["person"]
