@@ -387,7 +387,8 @@ security:
 mcp_servers:
   deepmcp:
     transport: "http"
-    url: "http://localhost:8080/mcp"
+    # DeepMCP 的 SSE 端点是 /sse，不是 /mcp
+    url: "http://localhost:8080/sse"
     tools:
       - yolo26_detect
       - paddleocr_recognize
@@ -489,8 +490,8 @@ openclaw gateway
         config: {
           mcpServers: {
             deepmcp: {
-              // DeepMCP 的 HTTP 地址
-              url: "http://localhost:8080/mcp",
+              // DeepMCP 的 SSE 端点（注意是 /sse，不是 /mcp）
+              url: "http://localhost:8080/sse",
 
               // 启用哪些工具（白名单）
               tools: [
@@ -732,8 +733,8 @@ openclaw gateway`} />
                   </h3>
                   <div className="space-y-3">
                     <div className="p-3 rounded-lg border border-white/5 bg-white/[0.02]">
-                      <p className="text-white text-xs font-medium">Q: OpenClaw 说"找不到工具"？</p>
-                      <p className="text-gray-400 text-xs mt-1">A: 检查 <code className="text-cyan-300">mcpServers.deepmcp.url</code> 是否写对，DeepMCP 是否正在运行，以及 <code className="text-cyan-300">tools</code> 白名单里是否列出了你想用的工具名。</p>
+                      <p className="text-white text-xs font-medium">Q: OpenClaw 说"找不到工具"或报 404？</p>
+                      <p className="text-gray-400 text-xs mt-1">A: DeepMCP 的 SSE 端点是 <code className="text-cyan-300">/sse</code>，不是 <code className="text-cyan-300">/mcp</code>。请把配置里的 url 改成 <code className="text-cyan-300">http://localhost:8080/sse</code>，然后确认 DeepMCP 正在运行，且 <code className="text-cyan-300">tools</code> 白名单里列出了你想用的工具名。</p>
                     </div>
                     <div className="p-3 rounded-lg border border-white/5 bg-white/[0.02]">
                       <p className="text-white text-xs font-medium">Q: DeepMCP 推送了，但 OpenClaw 没反应？</p>
