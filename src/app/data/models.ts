@@ -23,13 +23,13 @@ export interface ModelInfo {
 
 export const models: ModelInfo[] = [
   {
-    id: "yolov8",
-    name: "YOLOv8",
+    id: "yolo26",
+    name: "YOLO2026",
     version: "8.3.0",
     category: "目标检测",
     description: "实时目标检测与分割，支持80+类别识别，毫秒级推理速度",
     longDescription:
-      "YOLOv8 是 Ultralytics 推出的最新一代目标检测模型，在速度和精度上均达到 SOTA 水平。支持目标检测、实例分割、关键点检测、分类等多种任务。通过 MCP 协议调用可直接处理图片URL、Base64或本地路径。",
+      "YOLO2026 是 Ultralytics 推出的最新一代目标检测模型，在速度和精度上均达到 SOTA 水平。支持目标检测、实例分割、关键点检测、分类等多种任务。通过 MCP 协议调用可直接处理图片URL、Base64或本地路径。",
     tags: ["COCO", "实时", "多任务", "ONNX"],
     status: "online",
     latency: "12ms",
@@ -38,13 +38,13 @@ export const models: ModelInfo[] = [
     outputType: ["application/json"],
     color: "#00d4ff",
     icon: "🎯",
-    mcpTool: "yolov8_detect",
+    mcpTool: "yolo26_detect",
     params: "43M",
     framework: "PyTorch / ONNX",
     license: "AGPL-3.0",
     useCases: ["安防监控", "自动驾驶", "工业质检", "人流统计"],
     mcpExample: `{
-  "tool": "yolov8_detect",
+  "tool": "yolo26_detect",
   "arguments": {
     "image": "https://example.com/image.jpg",
     "confidence": 0.5,

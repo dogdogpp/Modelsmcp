@@ -19,7 +19,7 @@ const cvImage = "https://images.unsplash.com/photo-1554936970-ce06538caf54?crop=
 // Mock inference results per model
 const mockResults: Record<string, object> = {
   yolov8: {
-    model: "yolov8",
+    model: "yolo26",
     inference_time: "12ms",
     device: "CUDA (RTX 4090)",
     detections: [

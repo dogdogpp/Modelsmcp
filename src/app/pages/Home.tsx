@@ -20,7 +20,7 @@ const heroImage = "https://images.unsplash.com/photo-1753693765800-afdf24bfefaa?
 
 const codeSnippet = `# 使用 Claude / OpenClaw 调用 YOLO 检测
 {
-  "tool": "yolov8_detect",
+  "tool": "yolo26_detect",
   "arguments": {
     "image": "https://example.com/photo.jpg",
     "confidence": 0.5,
@@ -208,7 +208,7 @@ export function Home() {
                       else if (line.includes('"tool"') || line.includes('"arguments"')) color = "text-cyan-300";
                       else if (line.includes('"image"') || line.includes('"confidence"') || line.includes('"classes"')) color = "text-purple-300";
                       else if (line.includes('"detections"') || line.includes('"class"') || line.includes('"confidence"') || line.includes('"bbox"') || line.includes('"inference_time"')) color = "text-blue-300";
-                      else if (line.includes("yolov8_detect") || line.includes("person") || line.includes("car") || line.includes("0.") || line.includes("12ms")) color = "text-amber-300";
+                      else if (line.includes("yolo26_detect") || line.includes("person") || line.includes("car") || line.includes("0.") || line.includes("12ms")) color = "text-amber-300";
                       return (
                         <div key={i} className={`${color}`}>{line || " "}</div>
                       );
