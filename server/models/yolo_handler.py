@@ -69,6 +69,24 @@ class YOLOHandler:
             os.close(fd)
             return path
 
+        if image.startswith("data:"):
+            # Handle data URI: data:{mime};base64,{data}
+            header, _, data = image.partition(",")
+            mime = "image/jpeg"
+            if ";" in header:
+                mime = header[len("data:"):].split(";")[0]
+            ext = ".jpg"
+            if "png" in mime:
+                ext = ".png"
+            elif "webp" in mime:
+                ext = ".webp"
+            elif "bmp" in mime:
+                ext = ".bmp"
+            fd, path = tempfile.mkstemp(suffix=ext)
+            with os.fdopen(fd, "wb") as f:
+                f.write(base64.b64decode(data))
+            return path
+
         if image.startswith("base64://"):
             data = image[len("base64://"):]
             fd, path = tempfile.mkstemp(suffix=".jpg")
