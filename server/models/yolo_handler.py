@@ -24,7 +24,10 @@ class YOLOHandler:
     parameters = {
         "type": "object",
         "properties": {
-            "image": {"type": "string", "description": "图片 URL、Base64 或本地路径"},
+            "image": {
+                "type": "string",
+                "description": "图片输入：支持 HTTP/HTTPS URL、Base64、data URI、本地文件路径，以及 OpenClaw 媒体引用（media://inbound/<id>）。如果用户消息中包含 [media attached: media://inbound/<id>]，请直接将该 URI 作为本参数传入。",
+            },
             "confidence": {"type": "number", "default": 0.5},
             "classes": {"type": "array", "items": {"type": "string"}},
             "model_size": {"type": "string", "enum": ["n", "s", "m", "l", "x"], "default": "n"},
@@ -68,6 +71,33 @@ class YOLOHandler:
             urllib.request.urlretrieve(image, path)
             os.close(fd)
             return path
+
+        # OpenClaw media URI: media://inbound/<id>
+        # OpenClaw offloads large attachments (>2MB) to ~/.openclaw/media/inbound/
+        if image.startswith("media://inbound/"):
+            media_id = image[len("media://inbound/"):]
+            # Try local OpenClaw media directory first
+            openclaw_media_dir = Path.home() / ".openclaw" / "media" / "inbound"
+            if openclaw_media_dir.exists():
+                # The media ID may include an original-filename prefix and extension
+                candidates = list(openclaw_media_dir.glob(f"*{media_id}*"))
+                if candidates:
+                    # Pick the most recently modified match
+                    candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+                    return str(candidates[0])
+                # Exact match
+                exact = openclaw_media_dir / media_id
+                if exact.exists():
+                    return str(exact)
+            # Fallback: try OpenClaw HTTP media endpoint (if exposed)
+            try:
+                fd, path = tempfile.mkstemp(suffix=".jpg")
+                urllib.request.urlretrieve(f"http://localhost:18789/media/{media_id}", path)
+                os.close(fd)
+                return path
+            except Exception:
+                pass
+            raise ValueError(f"OpenClaw media not found: {image}")
 
         if image.startswith("data:"):
             # Handle data URI: data:{mime};base64,{data}

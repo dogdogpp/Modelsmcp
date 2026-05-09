@@ -155,12 +155,35 @@ async def call_tool_stream(request: CallRequest) -> AsyncGenerator[dict[str, Any
 # ---------------------------------------------------------------------------
 
 def _decode_image(image_input: str) -> Image.Image:
-    """Decode an image from base64 string (with or without data URI prefix) or HTTP URL to PIL Image."""
+    """Decode an image from base64 string (with or without data URI prefix), HTTP URL, or OpenClaw media URI to PIL Image."""
     if image_input.startswith("http://") or image_input.startswith("https://"):
         import urllib.request
         with urllib.request.urlopen(image_input, timeout=10) as resp:
             image_bytes = resp.read()
         return Image.open(io.BytesIO(image_bytes)).convert("RGB")
+
+    # OpenClaw media URI: media://inbound/<id>
+    if image_input.startswith("media://inbound/"):
+        media_id = image_input[len("media://inbound/"):]
+        openclaw_media_dir = Path.home() / ".openclaw" / "media" / "inbound"
+        if openclaw_media_dir.exists():
+            candidates = list(openclaw_media_dir.glob(f"*{media_id}*"))
+            if candidates:
+                candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+                with open(candidates[0], "rb") as f:
+                    return Image.open(io.BytesIO(f.read())).convert("RGB")
+            exact = openclaw_media_dir / media_id
+            if exact.exists():
+                with open(exact, "rb") as f:
+                    return Image.open(io.BytesIO(f.read())).convert("RGB")
+        # Fallback: try OpenClaw HTTP media endpoint
+        try:
+            import urllib.request
+            with urllib.request.urlopen(f"http://localhost:18789/media/{media_id}", timeout=5) as resp:
+                return Image.open(io.BytesIO(resp.read())).convert("RGB")
+        except Exception as exc:
+            raise ValueError(f"OpenClaw media not found: {image_input}") from exc
+
     image_b64 = image_input
     if "," in image_b64:
         image_b64 = image_b64.split(",", 1)[1]
@@ -243,7 +266,7 @@ _MOCK_TOOL_SCHEMAS = [
         inputSchema={
             "type": "object",
             "properties": {
-                "image": {"type": "string", "description": "Image URL or base64"},
+                "image": {"type": "string", "description": "Image input: supports HTTP/HTTPS URL, base64, data URI, local file path, and OpenClaw media reference (media://inbound/<id>). If the user message contains [media attached: media://inbound/<id>], pass that URI directly as this parameter."},
                 "confidence": {"type": "number", "default": 0.5},
                 "classes": {"type": "array", "items": {"type": "string"}},
             },
@@ -256,7 +279,7 @@ _MOCK_TOOL_SCHEMAS = [
         inputSchema={
             "type": "object",
             "properties": {
-                "image": {"type": "string"},
+                "image": {"type": "string", "description": "Image input: supports HTTP/HTTPS URL, base64, data URI, local file path, and OpenClaw media reference (media://inbound/<id>). If the user message contains [media attached: media://inbound/<id>], pass that URI directly as this parameter."},
                 "threshold": {"type": "number", "default": 0.7},
             },
             "required": ["image"],
@@ -268,7 +291,7 @@ _MOCK_TOOL_SCHEMAS = [
         inputSchema={
             "type": "object",
             "properties": {
-                "image": {"type": "string"},
+                "image": {"type": "string", "description": "Image input: supports HTTP/HTTPS URL, base64, data URI, local file path, and OpenClaw media reference (media://inbound/<id>). If the user message contains [media attached: media://inbound/<id>], pass that URI directly as this parameter."},
                 "lang": {"type": "string", "default": "ch"},
             },
             "required": ["image"],
@@ -280,7 +303,7 @@ _MOCK_TOOL_SCHEMAS = [
         inputSchema={
             "type": "object",
             "properties": {
-                "image": {"type": "string"},
+                "image": {"type": "string", "description": "Image input: supports HTTP/HTTPS URL, base64, data URI, local file path, and OpenClaw media reference (media://inbound/<id>). If the user message contains [media attached: media://inbound/<id>], pass that URI directly as this parameter."},
                 "prompts": {"type": "object"},
             },
             "required": ["image"],
@@ -292,7 +315,7 @@ _MOCK_TOOL_SCHEMAS = [
         inputSchema={
             "type": "object",
             "properties": {
-                "image": {"type": "string"},
+                "image": {"type": "string", "description": "Image input: supports HTTP/HTTPS URL, base64, data URI, local file path, and OpenClaw media reference (media://inbound/<id>). If the user message contains [media attached: media://inbound/<id>], pass that URI directly as this parameter."},
                 "texts": {"type": "array", "items": {"type": "string"}},
                 "mode": {"type": "string", "enum": ["classify", "encode"]},
             },
@@ -317,7 +340,7 @@ _MOCK_TOOL_SCHEMAS = [
         inputSchema={
             "type": "object",
             "properties": {
-                "image": {"type": "string"},
+                "image": {"type": "string", "description": "Image input: supports HTTP/HTTPS URL, base64, data URI, local file path, and OpenClaw media reference (media://inbound/<id>). If the user message contains [media attached: media://inbound/<id>], pass that URI directly as this parameter."},
                 "model_size": {"type": "string", "enum": ["small", "large"]},
             },
             "required": ["image"],
@@ -329,7 +352,7 @@ _MOCK_TOOL_SCHEMAS = [
         inputSchema={
             "type": "object",
             "properties": {
-                "image": {"type": "string"},
+                "image": {"type": "string", "description": "Image input: supports HTTP/HTTPS URL, base64, data URI, local file path, and OpenClaw media reference (media://inbound/<id>). If the user message contains [media attached: media://inbound/<id>], pass that URI directly as this parameter."},
                 "model": {"type": "string"},
             },
             "required": ["image"],
@@ -341,7 +364,7 @@ _MOCK_TOOL_SCHEMAS = [
         inputSchema={
             "type": "object",
             "properties": {
-                "image": {"type": "string"},
+                "image": {"type": "string", "description": "Image input: supports HTTP/HTTPS URL, base64, data URI, local file path, and OpenClaw media reference (media://inbound/<id>). If the user message contains [media attached: media://inbound/<id>], pass that URI directly as this parameter."},
                 "confidence": {"type": "number", "default": 0.5},
                 "visualize": {"type": "boolean", "default": False},
             },
@@ -354,7 +377,7 @@ _MOCK_TOOL_SCHEMAS = [
         inputSchema={
             "type": "object",
             "properties": {
-                "image": {"type": "string"},
+                "image": {"type": "string", "description": "Image input: supports HTTP/HTTPS URL, base64, data URI, local file path, and OpenClaw media reference (media://inbound/<id>). If the user message contains [media attached: media://inbound/<id>], pass that URI directly as this parameter."},
                 "text_prompt": {"type": "string"},
                 "box_threshold": {"type": "number", "default": 0.35},
             },
