@@ -240,7 +240,7 @@ _MOCK_TOOL_SCHEMAS = [
     McpToolSchema(
         name="yolo26_detect",
         description="YOLO2026 object detection",
-        parameters={
+        inputSchema={
             "type": "object",
             "properties": {
                 "image": {"type": "string", "description": "Image URL or base64"},
@@ -253,7 +253,7 @@ _MOCK_TOOL_SCHEMAS = [
     McpToolSchema(
         name="detr_detect",
         description="DETR Transformer object detection",
-        parameters={
+        inputSchema={
             "type": "object",
             "properties": {
                 "image": {"type": "string"},
@@ -265,7 +265,7 @@ _MOCK_TOOL_SCHEMAS = [
     McpToolSchema(
         name="paddleocr_recognize",
         description="PaddleOCR text recognition",
-        parameters={
+        inputSchema={
             "type": "object",
             "properties": {
                 "image": {"type": "string"},
@@ -277,7 +277,7 @@ _MOCK_TOOL_SCHEMAS = [
     McpToolSchema(
         name="sam2_segment",
         description="SAM 2 image/video segmentation",
-        parameters={
+        inputSchema={
             "type": "object",
             "properties": {
                 "image": {"type": "string"},
@@ -289,7 +289,7 @@ _MOCK_TOOL_SCHEMAS = [
     McpToolSchema(
         name="clip_encode",
         description="CLIP image-text encoding",
-        parameters={
+        inputSchema={
             "type": "object",
             "properties": {
                 "image": {"type": "string"},
@@ -301,7 +301,7 @@ _MOCK_TOOL_SCHEMAS = [
     McpToolSchema(
         name="whisper_transcribe",
         description="Whisper speech recognition",
-        parameters={
+        inputSchema={
             "type": "object",
             "properties": {
                 "audio": {"type": "string"},
@@ -314,7 +314,7 @@ _MOCK_TOOL_SCHEMAS = [
     McpToolSchema(
         name="depth_estimate",
         description="Depth Anything depth estimation",
-        parameters={
+        inputSchema={
             "type": "object",
             "properties": {
                 "image": {"type": "string"},
@@ -326,7 +326,7 @@ _MOCK_TOOL_SCHEMAS = [
     McpToolSchema(
         name="dinov2_embed",
         description="DINOv2 visual feature extraction",
-        parameters={
+        inputSchema={
             "type": "object",
             "properties": {
                 "image": {"type": "string"},
@@ -338,7 +338,7 @@ _MOCK_TOOL_SCHEMAS = [
     McpToolSchema(
         name="pose_estimate",
         description="YOLOv8 human pose estimation",
-        parameters={
+        inputSchema={
             "type": "object",
             "properties": {
                 "image": {"type": "string"},
@@ -351,7 +351,7 @@ _MOCK_TOOL_SCHEMAS = [
     McpToolSchema(
         name="grounding_dino_detect",
         description="Grounding DINO open-vocabulary detection",
-        parameters={
+        inputSchema={
             "type": "object",
             "properties": {
                 "image": {"type": "string"},
@@ -364,7 +364,7 @@ _MOCK_TOOL_SCHEMAS = [
     McpToolSchema(
         name="camera_list",
         description="List available local cameras and their current status. Call this first to discover valid camera identifiers before using camera_get_frame or camera_get_last_detection.",
-        parameters={
+        inputSchema={
             "type": "object",
             "properties": {},
             "required": [],
@@ -373,7 +373,7 @@ _MOCK_TOOL_SCHEMAS = [
     McpToolSchema(
         name="camera_get_frame",
         description="Get the real-time frame from a specified camera as base64 JPEG. Example natural language: '查看门口摄像头实时画面' or '获取 cam_0 的画面'. Use camera_list first if you are unsure of the identifier.",
-        parameters={
+        inputSchema={
             "type": "object",
             "properties": {
                 "camera_id": {
@@ -388,7 +388,7 @@ _MOCK_TOOL_SCHEMAS = [
     McpToolSchema(
         name="camera_get_last_detection",
         description="Get the most recent frame containing a detected person from a specified camera. Example natural language: '查看门口摄像头最近一次检测到人的画面' or '获取 cam_0 的人形检测截图'. Use camera_list first if you are unsure of the identifier.",
-        parameters={
+        inputSchema={
             "type": "object",
             "properties": {
                 "camera_id": {

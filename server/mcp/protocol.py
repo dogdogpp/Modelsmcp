@@ -15,7 +15,7 @@ class McpParameterSchema(BaseModel):
 class McpToolSchema(BaseModel):
     name: str
     description: str
-    parameters: dict[str, Any]
+    inputSchema: dict[str, Any]
 
 
 class ToolsResponse(BaseModel):
