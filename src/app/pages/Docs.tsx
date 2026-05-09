@@ -189,7 +189,7 @@ deepmcp pull --all
 # 下载单个模型
 deepmcp pull yolo26 paddleocr
 
-# 启动 MCP 服务（默认端口 8080）
+# 启动 MCP 服务（默认端口 8081）
 deepmcp serve --gpu
 
 # 指定 CPU 运行
@@ -205,10 +205,10 @@ deepmcp serve --device cpu`}
                     copyKey="verify"
                     lang="bash"
                     code={`# 查看可用工具列表
-curl http://localhost:8080/tools
+curl http://localhost:8081/tools
 
 # 测试推理
-curl -X POST http://localhost:8080/call \\
+curl -X POST http://localhost:8081/call \\
   -H "Content-Type: application/json" \\
   -d '{"tool": "yolo26_detect", "arguments": {"image": "https://example.com/img.jpg"}}'`}
                   />
@@ -318,7 +318,7 @@ Content-Type: application/json
                 code={`# deepmcp.config.yaml
 server:
   host: "0.0.0.0"
-  port: 8080
+  port: 8081
   workers: 4
 
 inference:
@@ -364,7 +364,7 @@ security:
   "mcpServers": {
     "deepmcp": {
       "command": "deepmcp",
-      "args": ["serve", "--port", "8080", "--device", "cuda"],
+      "args": ["serve", "--port", "8081", "--device", "cuda"],
       "env": {
         "DEEPMCP_MODELS": "yolo26,paddleocr,sam2,whisper"
       }
@@ -388,7 +388,7 @@ mcp_servers:
   deepmcp:
     transport: "http"
     # DeepMCP 的 SSE 端点是 /sse，不是 /mcp
-    url: "http://localhost:8080/sse"
+    url: "http://localhost:8081/sse"
     tools:
       - yolo26_detect
       - paddleocr_recognize
@@ -436,12 +436,12 @@ mcp_servers:
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                     <div className="p-4 rounded-xl border border-white/5 bg-white/[0.02]">
                       <div className="text-white text-sm font-medium mb-2">启动 DeepMCP（视觉专家）</div>
-                      <div className="text-gray-500 text-xs mb-2">默认监听 http://localhost:8080</div>
+                      <div className="text-gray-500 text-xs mb-2">默认监听 http://localhost:8081</div>
                       <CodeBlock copyKey="step1-deepmcp" lang="bash" code={`# 启动服务
-deepmcp serve --port 8080
+deepmcp serve --port 8081
 
 # 看到类似输出就说明成功了
-# INFO  DeepMCP ready at http://0.0.0.0:8080
+# INFO  DeepMCP ready at http://0.0.0.0:8081
 # INFO  Loaded tools: yolo26_detect, paddleocr_recognize, sam2_segment`} />
                     </div>
                     <div className="p-4 rounded-xl border border-white/5 bg-white/[0.02]">
@@ -457,7 +457,7 @@ openclaw gateway
                   </div>
 
                   <div className="p-3 rounded-lg border border-amber-500/20 bg-amber-500/5 text-amber-300 text-xs">
-                    验证两个小窗口都开着，别关掉。记住两个地址：DeepMCP 是 <code className="text-cyan-300">8080</code> 端口，OpenClaw 是 <code className="text-cyan-300">18789</code> 端口。
+                    验证两个小窗口都开着，别关掉。记住两个地址：DeepMCP 是 <code className="text-cyan-300">8081</code> 端口，OpenClaw 是 <code className="text-cyan-300">18789</code> 端口。
                   </div>
                 </div>
 
@@ -491,7 +491,7 @@ openclaw gateway
           mcpServers: {
             deepmcp: {
               // DeepMCP 的 SSE 端点（注意是 /sse，不是 /mcp）
-              url: "http://localhost:8080/sse",
+              url: "http://localhost:8081/sse",
 
               // 启用哪些工具（白名单）
               tools: [
@@ -734,7 +734,7 @@ openclaw gateway`} />
                   <div className="space-y-3">
                     <div className="p-3 rounded-lg border border-white/5 bg-white/[0.02]">
                       <p className="text-white text-xs font-medium">Q: OpenClaw 说"找不到工具"或报 404？</p>
-                      <p className="text-gray-400 text-xs mt-1">A: DeepMCP 的 SSE 端点是 <code className="text-cyan-300">/sse</code>，不是 <code className="text-cyan-300">/mcp</code>。请把配置里的 url 改成 <code className="text-cyan-300">http://localhost:8080/sse</code>，然后确认 DeepMCP 正在运行，且 <code className="text-cyan-300">tools</code> 白名单里列出了你想用的工具名。</p>
+                      <p className="text-gray-400 text-xs mt-1">A: DeepMCP 的 SSE 端点是 <code className="text-cyan-300">/sse</code>，不是 <code className="text-cyan-300">/mcp</code>。请把配置里的 url 改成 <code className="text-cyan-300">http://localhost:8081/sse</code>，然后确认 DeepMCP 正在运行，且 <code className="text-cyan-300">tools</code> 白名单里列出了你想用的工具名。</p>
                     </div>
                     <div className="p-3 rounded-lg border border-white/5 bg-white/[0.02]">
                       <p className="text-white text-xs font-medium">Q: DeepMCP 推送了，但 OpenClaw 没反应？</p>
@@ -766,13 +766,13 @@ openclaw gateway`} />
                     code={`# GPU 版本
 docker run -d \\
   --gpus all \\
-  -p 8080:8080 \\
+  -p 8081:8081 \\
   -v ~/.deepmcp/models:/models \\
   deepmcp/deepmcp:latest
 
 # CPU 版本
 docker run -d \\
-  -p 8080:8080 \\
+  -p 8081:8081 \\
   -v ~/.deepmcp/models:/models \\
   deepmcp/deepmcp:cpu`}
                   />
@@ -787,7 +787,7 @@ services:
   deepmcp:
     image: deepmcp/deepmcp:latest
     ports:
-      - "8080:8080"
+      - "8081:8081"
     volumes:
       - ./models:/models
       - ./deepmcp.config.yaml:/config.yaml

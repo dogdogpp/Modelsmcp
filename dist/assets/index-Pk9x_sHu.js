@@ -372,15 +372,15 @@ deepmcp pull --all
 # 下载单个模型
 deepmcp pull yolo26 paddleocr
 
-# 启动 MCP 服务（默认端口 8080）
+# 启动 MCP 服务（默认端口 8081）
 deepmcp serve --gpu
 
 # 指定 CPU 运行
 deepmcp serve --device cpu`})]}),v.jsxs("div",{children:[v.jsxs("div",{className:"flex items-center gap-2 mb-2",children:[v.jsx("span",{className:"w-5 h-5 rounded-full bg-cyan-500/20 text-cyan-400 text-xs flex items-center justify-center",style:{fontWeight:700},children:"3"}),v.jsx("h3",{className:"text-white",style:{fontWeight:600},children:"验证服务正常运行"})]}),v.jsx(Rt,{copyKey:"verify",lang:"bash",code:`# 查看可用工具列表
-curl http://localhost:8080/tools
+curl http://localhost:8081/tools
 
 # 测试推理
-curl -X POST http://localhost:8080/call \\
+curl -X POST http://localhost:8081/call \\
   -H "Content-Type: application/json" \\
   -d '{"tool": "yolo26_detect", "arguments": {"image": "https://example.com/img.jpg"}}'`})]})]})]}),v.jsxs("section",{id:"mcp-protocol",children:[v.jsx("h2",{className:"text-white mb-4",style:{fontSize:"1.5rem",fontWeight:700},children:"MCP 协议"}),v.jsx("p",{className:"text-gray-400 leading-relaxed mb-4",children:"DeepMCP 遵循 Anthropic 定义的 Model Context Protocol (MCP) 规范。 服务暴露标准 HTTP 端点，所有工具调用使用统一的 JSON 格式。"}),v.jsxs("div",{className:"mb-4",children:[v.jsx("h3",{className:"text-white mb-3",style:{fontWeight:600},children:"API 端点"}),v.jsx("div",{className:"space-y-2",children:[{method:"GET",path:"/tools",desc:"列出所有可用工具"},{method:"POST",path:"/call",desc:"调用工具执行推理"},{method:"GET",path:"/health",desc:"检查服务健康状态"},{method:"GET",path:"/metrics",desc:"获取推理性能指标"}].map(n=>v.jsxs("div",{className:"flex items-center gap-3 p-3 rounded-lg border border-white/5 bg-white/[0.02]",children:[v.jsx("span",{className:`text-xs font-mono px-2 py-0.5 rounded ${n.method==="GET"?"bg-green-500/10 text-green-400":"bg-blue-500/10 text-blue-400"}`,style:{fontWeight:600},children:n.method}),v.jsx("code",{className:"text-cyan-300 text-sm font-mono",children:n.path}),v.jsx("span",{className:"text-gray-500 text-sm",children:n.desc})]},n.path))})]}),v.jsx("h3",{className:"text-white mb-3",style:{fontWeight:600},children:"请求格式"}),v.jsx(Rt,{copyKey:"request",lang:"json",code:`POST /call HTTP/1.1
 Content-Type: application/json
@@ -412,7 +412,7 @@ Content-Type: application/json
 }`})]}),v.jsxs("section",{id:"tools",children:[v.jsx("h2",{className:"text-white mb-4",style:{fontSize:"1.5rem",fontWeight:700},children:"工具列表"}),v.jsx("div",{className:"space-y-3",children:WV.map(n=>v.jsxs("div",{className:"p-4 rounded-xl border border-white/5 bg-white/[0.02]",children:[v.jsxs("div",{className:"flex items-start justify-between mb-2",children:[v.jsx("code",{className:"text-cyan-400 text-sm font-mono",style:{fontWeight:600},children:n.name}),v.jsx("span",{className:"text-gray-500 text-xs",children:n.desc})]}),v.jsx("div",{className:"flex flex-wrap gap-1.5",children:n.params.map(i=>v.jsx("span",{className:"px-2 py-0.5 rounded bg-white/5 text-gray-400 text-xs font-mono",children:i},i))})]},n.name))})]}),v.jsxs("section",{id:"config",children:[v.jsx("h2",{className:"text-white mb-4",style:{fontSize:"1.5rem",fontWeight:700},children:"配置参考"}),v.jsx(Rt,{copyKey:"config",lang:"yaml",code:`# deepmcp.config.yaml
 server:
   host: "0.0.0.0"
-  port: 8080
+  port: 8081
   workers: 4
 
 inference:
@@ -442,7 +442,7 @@ security:
   "mcpServers": {
     "deepmcp": {
       "command": "deepmcp",
-      "args": ["serve", "--port", "8080", "--device", "cuda"],
+      "args": ["serve", "--port", "8081", "--device", "cuda"],
       "env": {
         "DEEPMCP_MODELS": "yolo26,paddleocr,sam2,whisper"
       }
@@ -453,7 +453,7 @@ mcp_servers:
   deepmcp:
     transport: "http"
     # DeepMCP 的 SSE 端点是 /sse，不是 /mcp
-    url: "http://localhost:8080/sse"
+    url: "http://localhost:8081/sse"
     tools:
       - yolo26_detect
       - paddleocr_recognize
@@ -461,17 +461,17 @@ mcp_servers:
       - whisper_transcribe
     auth:
       type: none
-    timeout: 60`})]}),v.jsxs("section",{id:"openclaw-bidirectional",children:[v.jsx("h2",{className:"text-white mb-4",style:{fontSize:"1.5rem",fontWeight:700},children:"OpenClaw 双向订阅通信"}),v.jsxs("p",{className:"text-gray-400 leading-relaxed mb-4",children:["这一节面向零基础用户，手把手教你怎么让 ",v.jsx("strong",{children:"OpenClaw"}),"（你的 AI 助手）和 ",v.jsx("strong",{children:"DeepMCP"}),'（你的视觉推理引擎）实现"双向聊天"。']}),v.jsxs("div",{className:"p-4 rounded-xl border border-cyan-500/20 bg-cyan-500/5 mb-6",children:[v.jsx("p",{className:"text-cyan-300 text-sm font-medium mb-2",children:"打个比方"}),v.jsxs("p",{className:"text-gray-400 text-sm leading-relaxed",children:['想象 OpenClaw 是你的"老板"，DeepMCP 是你的"视觉专家"。',v.jsx("br",{}),v.jsx("br",{}),v.jsx("strong",{children:"单向模式"}),"：老板把照片递给专家，专家看完直接在纸上写结果递回来。一锤子买卖，中间不能打断、不能追问。",v.jsx("br",{}),v.jsx("br",{}),v.jsx("strong",{children:"双向模式"}),'：老板和专家加了个微信群。老板可以随时@专家发新照片；专家处理到一半还能在群里发"正在数人数，60%了…"；处理完自动发结果到群里。甚至专家发现摄像头新画面有异常，也能主动@老板报警。',v.jsx("br",{}),v.jsx("br",{}),"这就是双向订阅——两个人都能主动说话，不是只能等对方先开口。"]})]}),v.jsxs("div",{className:"space-y-10",children:[v.jsxs("div",{children:[v.jsxs("h3",{className:"text-white mb-3 flex items-center gap-2",style:{fontWeight:600},children:[v.jsx("span",{className:"w-6 h-6 rounded-full bg-cyan-500/20 text-cyan-400 text-xs flex items-center justify-center",style:{fontWeight:700},children:"1"}),"前置准备：两个服务都要先跑起来"]}),v.jsx("p",{className:"text-gray-400 text-sm leading-relaxed mb-3",children:"就像微信聊天前两人都要先安装微信。你需要同时启动 OpenClaw 和 DeepMCP。"}),v.jsxs("div",{className:"grid grid-cols-1 md:grid-cols-2 gap-4 mb-4",children:[v.jsxs("div",{className:"p-4 rounded-xl border border-white/5 bg-white/[0.02]",children:[v.jsx("div",{className:"text-white text-sm font-medium mb-2",children:"启动 DeepMCP（视觉专家）"}),v.jsx("div",{className:"text-gray-500 text-xs mb-2",children:"默认监听 http://localhost:8080"}),v.jsx(Rt,{copyKey:"step1-deepmcp",lang:"bash",code:`# 启动服务
-deepmcp serve --port 8080
+    timeout: 60`})]}),v.jsxs("section",{id:"openclaw-bidirectional",children:[v.jsx("h2",{className:"text-white mb-4",style:{fontSize:"1.5rem",fontWeight:700},children:"OpenClaw 双向订阅通信"}),v.jsxs("p",{className:"text-gray-400 leading-relaxed mb-4",children:["这一节面向零基础用户，手把手教你怎么让 ",v.jsx("strong",{children:"OpenClaw"}),"（你的 AI 助手）和 ",v.jsx("strong",{children:"DeepMCP"}),'（你的视觉推理引擎）实现"双向聊天"。']}),v.jsxs("div",{className:"p-4 rounded-xl border border-cyan-500/20 bg-cyan-500/5 mb-6",children:[v.jsx("p",{className:"text-cyan-300 text-sm font-medium mb-2",children:"打个比方"}),v.jsxs("p",{className:"text-gray-400 text-sm leading-relaxed",children:['想象 OpenClaw 是你的"老板"，DeepMCP 是你的"视觉专家"。',v.jsx("br",{}),v.jsx("br",{}),v.jsx("strong",{children:"单向模式"}),"：老板把照片递给专家，专家看完直接在纸上写结果递回来。一锤子买卖，中间不能打断、不能追问。",v.jsx("br",{}),v.jsx("br",{}),v.jsx("strong",{children:"双向模式"}),'：老板和专家加了个微信群。老板可以随时@专家发新照片；专家处理到一半还能在群里发"正在数人数，60%了…"；处理完自动发结果到群里。甚至专家发现摄像头新画面有异常，也能主动@老板报警。',v.jsx("br",{}),v.jsx("br",{}),"这就是双向订阅——两个人都能主动说话，不是只能等对方先开口。"]})]}),v.jsxs("div",{className:"space-y-10",children:[v.jsxs("div",{children:[v.jsxs("h3",{className:"text-white mb-3 flex items-center gap-2",style:{fontWeight:600},children:[v.jsx("span",{className:"w-6 h-6 rounded-full bg-cyan-500/20 text-cyan-400 text-xs flex items-center justify-center",style:{fontWeight:700},children:"1"}),"前置准备：两个服务都要先跑起来"]}),v.jsx("p",{className:"text-gray-400 text-sm leading-relaxed mb-3",children:"就像微信聊天前两人都要先安装微信。你需要同时启动 OpenClaw 和 DeepMCP。"}),v.jsxs("div",{className:"grid grid-cols-1 md:grid-cols-2 gap-4 mb-4",children:[v.jsxs("div",{className:"p-4 rounded-xl border border-white/5 bg-white/[0.02]",children:[v.jsx("div",{className:"text-white text-sm font-medium mb-2",children:"启动 DeepMCP（视觉专家）"}),v.jsx("div",{className:"text-gray-500 text-xs mb-2",children:"默认监听 http://localhost:8081"}),v.jsx(Rt,{copyKey:"step1-deepmcp",lang:"bash",code:`# 启动服务
+deepmcp serve --port 8081
 
 # 看到类似输出就说明成功了
-# INFO  DeepMCP ready at http://0.0.0.0:8080
+# INFO  DeepMCP ready at http://0.0.0.0:8081
 # INFO  Loaded tools: yolo26_detect, paddleocr_recognize, sam2_segment`})]}),v.jsxs("div",{className:"p-4 rounded-xl border border-white/5 bg-white/[0.02]",children:[v.jsx("div",{className:"text-white text-sm font-medium mb-2",children:"启动 OpenClaw（AI 老板）"}),v.jsx("div",{className:"text-gray-500 text-xs mb-2",children:"默认监听 http://localhost:18789"}),v.jsx(Rt,{copyKey:"step1-openclaw",lang:"bash",code:`# 启动网关
 openclaw gateway
 
 # 看到类似输出就说明成功了
 # INFO  Gateway listening on ws://0.0.0.0:18789
-# INFO  Control UI: http://127.0.0.1:18789`})]})]}),v.jsxs("div",{className:"p-3 rounded-lg border border-amber-500/20 bg-amber-500/5 text-amber-300 text-xs",children:["验证两个小窗口都开着，别关掉。记住两个地址：DeepMCP 是 ",v.jsx("code",{className:"text-cyan-300",children:"8080"})," 端口，OpenClaw 是 ",v.jsx("code",{className:"text-cyan-300",children:"18789"})," 端口。"]})]}),v.jsxs("div",{children:[v.jsxs("h3",{className:"text-white mb-3 flex items-center gap-2",style:{fontWeight:600},children:[v.jsx("span",{className:"w-6 h-6 rounded-full bg-cyan-500/20 text-cyan-400 text-xs flex items-center justify-center",style:{fontWeight:700},children:"2"}),'第一路：让 OpenClaw 能"指挥" DeepMCP（老板@专家）']}),v.jsx("p",{className:"text-gray-400 text-sm leading-relaxed mb-3",children:'这一步是让 OpenClaw 知道："我有个叫 DeepMCP 的手下，它擅长看图说话"。 配置完成后，你在 OpenClaw 聊天窗口发一张图，它就能自动调用 DeepMCP 做目标检测。'}),v.jsxs("div",{className:"mb-3",children:[v.jsx("p",{className:"text-white text-sm font-medium mb-2",children:"打开 OpenClaw 配置文件"}),v.jsxs("p",{className:"text-gray-500 text-xs mb-2",children:["文件位置：",v.jsx("code",{className:"text-cyan-300",children:"~/.openclaw/openclaw.json"}),"（JSON5 格式，支持注释）"]})]}),v.jsx(Rt,{copyKey:"step2-config",lang:"json",code:`{
+# INFO  Control UI: http://127.0.0.1:18789`})]})]}),v.jsxs("div",{className:"p-3 rounded-lg border border-amber-500/20 bg-amber-500/5 text-amber-300 text-xs",children:["验证两个小窗口都开着，别关掉。记住两个地址：DeepMCP 是 ",v.jsx("code",{className:"text-cyan-300",children:"8081"})," 端口，OpenClaw 是 ",v.jsx("code",{className:"text-cyan-300",children:"18789"})," 端口。"]})]}),v.jsxs("div",{children:[v.jsxs("h3",{className:"text-white mb-3 flex items-center gap-2",style:{fontWeight:600},children:[v.jsx("span",{className:"w-6 h-6 rounded-full bg-cyan-500/20 text-cyan-400 text-xs flex items-center justify-center",style:{fontWeight:700},children:"2"}),'第一路：让 OpenClaw 能"指挥" DeepMCP（老板@专家）']}),v.jsx("p",{className:"text-gray-400 text-sm leading-relaxed mb-3",children:'这一步是让 OpenClaw 知道："我有个叫 DeepMCP 的手下，它擅长看图说话"。 配置完成后，你在 OpenClaw 聊天窗口发一张图，它就能自动调用 DeepMCP 做目标检测。'}),v.jsxs("div",{className:"mb-3",children:[v.jsx("p",{className:"text-white text-sm font-medium mb-2",children:"打开 OpenClaw 配置文件"}),v.jsxs("p",{className:"text-gray-500 text-xs mb-2",children:["文件位置：",v.jsx("code",{className:"text-cyan-300",children:"~/.openclaw/openclaw.json"}),"（JSON5 格式，支持注释）"]})]}),v.jsx(Rt,{copyKey:"step2-config",lang:"json",code:`{
   // ... 你原来的配置 ...
 
   plugins: {
@@ -482,7 +482,7 @@ openclaw gateway
           mcpServers: {
             deepmcp: {
               // DeepMCP 的 SSE 端点（注意是 /sse，不是 /mcp）
-              url: "http://localhost:8080/sse",
+              url: "http://localhost:8081/sse",
 
               // 启用哪些工具（白名单）
               tools: [
@@ -600,23 +600,23 @@ openclaw gateway`})]})]}),v.jsxs("div",{children:[v.jsxs("h3",{className:"text-w
       }
     ]
   }
-}`}),v.jsx("div",{className:"p-3 rounded-lg border border-amber-500/20 bg-amber-500/5 text-amber-300 text-xs mt-3",children:"这只是 Cron 的一种用法思路。具体语法请参考 OpenClaw 官方 Cron 文档，核心思想是：DeepMCP 不仅能被动等调用，还能被定时触发主动干活。"})]}),v.jsxs("div",{children:[v.jsxs("h3",{className:"text-white mb-3 flex items-center gap-2",style:{fontWeight:600},children:[v.jsx("span",{className:"w-6 h-6 rounded-full bg-cyan-500/20 text-cyan-400 text-xs flex items-center justify-center",style:{fontWeight:700},children:"6"}),"常见问题排查"]}),v.jsxs("div",{className:"space-y-3",children:[v.jsxs("div",{className:"p-3 rounded-lg border border-white/5 bg-white/[0.02]",children:[v.jsx("p",{className:"text-white text-xs font-medium",children:'Q: OpenClaw 说"找不到工具"或报 404？'}),v.jsxs("p",{className:"text-gray-400 text-xs mt-1",children:["A: DeepMCP 的 SSE 端点是 ",v.jsx("code",{className:"text-cyan-300",children:"/sse"}),"，不是 ",v.jsx("code",{className:"text-cyan-300",children:"/mcp"}),"。请把配置里的 url 改成 ",v.jsx("code",{className:"text-cyan-300",children:"http://localhost:8080/sse"}),"，然后确认 DeepMCP 正在运行，且 ",v.jsx("code",{className:"text-cyan-300",children:"tools"})," 白名单里列出了你想用的工具名。"]})]}),v.jsxs("div",{className:"p-3 rounded-lg border border-white/5 bg-white/[0.02]",children:[v.jsx("p",{className:"text-white text-xs font-medium",children:"Q: DeepMCP 推送了，但 OpenClaw 没反应？"}),v.jsxs("p",{className:"text-gray-400 text-xs mt-1",children:["A: 检查两边的 token 是否一致；检查 OpenClaw 的 ",v.jsx("code",{className:"text-cyan-300",children:"hooks.enabled"})," 是否为 ",v.jsx("code",{className:"text-cyan-300",children:"true"}),"；检查 ",v.jsx("code",{className:"text-cyan-300",children:"match.path"})," 和 DeepMCP 推送的 URL 路径是否匹配（比如 ",v.jsx("code",{className:"text-cyan-300",children:"/hooks/deepmcp"}),"）。"]})]}),v.jsxs("div",{className:"p-3 rounded-lg border border-white/5 bg-white/[0.02]",children:[v.jsx("p",{className:"text-white text-xs font-medium",children:"Q: 能不能让 OpenClaw 推送消息到 Telegram / 微信？"}),v.jsxs("p",{className:"text-gray-400 text-xs mt-1",children:["A: 可以。在 hooks mapping 里加 ",v.jsx("code",{className:"text-cyan-300",children:'channel: "telegram"'})," 和 ",v.jsx("code",{className:"text-cyan-300",children:'to: "你的用户ID"'}),"，OpenClaw 就会把结果推送到指定渠道。"]})]}),v.jsxs("div",{className:"p-3 rounded-lg border border-white/5 bg-white/[0.02]",children:[v.jsx("p",{className:"text-white text-xs font-medium",children:"Q: 两边不在同一台机器上怎么办？"}),v.jsxs("p",{className:"text-gray-400 text-xs mt-1",children:["A: 把配置里的 ",v.jsx("code",{className:"text-cyan-300",children:"localhost"})," 改成实际 IP 或域名，并确保防火墙开放了对应端口。生产环境建议用 Tailscale 或内网穿透，不要直接把端口暴露在公网。"]})]})]})]})]})]}),v.jsxs("section",{id:"local-deploy",children:[v.jsx("h2",{className:"text-white mb-4",style:{fontSize:"1.5rem",fontWeight:700},children:"本地部署"}),v.jsxs("div",{className:"space-y-4",children:[v.jsxs("div",{children:[v.jsx("h3",{className:"text-white mb-2",style:{fontWeight:600},children:"Docker 部署（推荐）"}),v.jsx(Rt,{copyKey:"docker",lang:"bash",code:`# GPU 版本
+}`}),v.jsx("div",{className:"p-3 rounded-lg border border-amber-500/20 bg-amber-500/5 text-amber-300 text-xs mt-3",children:"这只是 Cron 的一种用法思路。具体语法请参考 OpenClaw 官方 Cron 文档，核心思想是：DeepMCP 不仅能被动等调用，还能被定时触发主动干活。"})]}),v.jsxs("div",{children:[v.jsxs("h3",{className:"text-white mb-3 flex items-center gap-2",style:{fontWeight:600},children:[v.jsx("span",{className:"w-6 h-6 rounded-full bg-cyan-500/20 text-cyan-400 text-xs flex items-center justify-center",style:{fontWeight:700},children:"6"}),"常见问题排查"]}),v.jsxs("div",{className:"space-y-3",children:[v.jsxs("div",{className:"p-3 rounded-lg border border-white/5 bg-white/[0.02]",children:[v.jsx("p",{className:"text-white text-xs font-medium",children:'Q: OpenClaw 说"找不到工具"或报 404？'}),v.jsxs("p",{className:"text-gray-400 text-xs mt-1",children:["A: DeepMCP 的 SSE 端点是 ",v.jsx("code",{className:"text-cyan-300",children:"/sse"}),"，不是 ",v.jsx("code",{className:"text-cyan-300",children:"/mcp"}),"。请把配置里的 url 改成 ",v.jsx("code",{className:"text-cyan-300",children:"http://localhost:8081/sse"}),"，然后确认 DeepMCP 正在运行，且 ",v.jsx("code",{className:"text-cyan-300",children:"tools"})," 白名单里列出了你想用的工具名。"]})]}),v.jsxs("div",{className:"p-3 rounded-lg border border-white/5 bg-white/[0.02]",children:[v.jsx("p",{className:"text-white text-xs font-medium",children:"Q: DeepMCP 推送了，但 OpenClaw 没反应？"}),v.jsxs("p",{className:"text-gray-400 text-xs mt-1",children:["A: 检查两边的 token 是否一致；检查 OpenClaw 的 ",v.jsx("code",{className:"text-cyan-300",children:"hooks.enabled"})," 是否为 ",v.jsx("code",{className:"text-cyan-300",children:"true"}),"；检查 ",v.jsx("code",{className:"text-cyan-300",children:"match.path"})," 和 DeepMCP 推送的 URL 路径是否匹配（比如 ",v.jsx("code",{className:"text-cyan-300",children:"/hooks/deepmcp"}),"）。"]})]}),v.jsxs("div",{className:"p-3 rounded-lg border border-white/5 bg-white/[0.02]",children:[v.jsx("p",{className:"text-white text-xs font-medium",children:"Q: 能不能让 OpenClaw 推送消息到 Telegram / 微信？"}),v.jsxs("p",{className:"text-gray-400 text-xs mt-1",children:["A: 可以。在 hooks mapping 里加 ",v.jsx("code",{className:"text-cyan-300",children:'channel: "telegram"'})," 和 ",v.jsx("code",{className:"text-cyan-300",children:'to: "你的用户ID"'}),"，OpenClaw 就会把结果推送到指定渠道。"]})]}),v.jsxs("div",{className:"p-3 rounded-lg border border-white/5 bg-white/[0.02]",children:[v.jsx("p",{className:"text-white text-xs font-medium",children:"Q: 两边不在同一台机器上怎么办？"}),v.jsxs("p",{className:"text-gray-400 text-xs mt-1",children:["A: 把配置里的 ",v.jsx("code",{className:"text-cyan-300",children:"localhost"})," 改成实际 IP 或域名，并确保防火墙开放了对应端口。生产环境建议用 Tailscale 或内网穿透，不要直接把端口暴露在公网。"]})]})]})]})]})]}),v.jsxs("section",{id:"local-deploy",children:[v.jsx("h2",{className:"text-white mb-4",style:{fontSize:"1.5rem",fontWeight:700},children:"本地部署"}),v.jsxs("div",{className:"space-y-4",children:[v.jsxs("div",{children:[v.jsx("h3",{className:"text-white mb-2",style:{fontWeight:600},children:"Docker 部署（推荐）"}),v.jsx(Rt,{copyKey:"docker",lang:"bash",code:`# GPU 版本
 docker run -d \\
   --gpus all \\
-  -p 8080:8080 \\
+  -p 8081:8081 \\
   -v ~/.deepmcp/models:/models \\
   deepmcp/deepmcp:latest
 
 # CPU 版本
 docker run -d \\
-  -p 8080:8080 \\
+  -p 8081:8081 \\
   -v ~/.deepmcp/models:/models \\
   deepmcp/deepmcp:cpu`})]}),v.jsxs("div",{children:[v.jsx("h3",{className:"text-white mb-2",style:{fontWeight:600},children:"Docker Compose"}),v.jsx(Rt,{copyKey:"compose",lang:"yaml",code:`version: "3.8"
 services:
   deepmcp:
     image: deepmcp/deepmcp:latest
     ports:
-      - "8080:8080"
+      - "8081:8081"
     volumes:
       - ./models:/models
       - ./deepmcp.config.yaml:/config.yaml
