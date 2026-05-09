@@ -322,7 +322,20 @@ async def mcp_messages(session_id: str = Query(...), raw_request: Request = None
     params = body.get("params", {})
     req_id = body.get("id")
 
-    if method == "tools/list":
+    if method == "initialize":
+        result = {
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "result": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "serverInfo": {"name": "deepmcp", "version": "0.2.0"},
+            },
+        }
+    elif method == "notifications/initialized":
+        # Notification — no response required
+        return {"ok": True}
+    elif method == "tools/list":
         tools_response = get_tools()
         result = {
             "jsonrpc": "2.0",
