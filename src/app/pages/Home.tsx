@@ -400,7 +400,7 @@ export function Home() {
                 step: "02",
                 title: "配置 MCP",
                 description: "在 Claude / OpenClaw 配置文件中添加 DeepMCP 服务地址",
-                code: `"deepmcp": {\n  "url": "http://localhost:8080"\n}`,
+                code: `"deepmcp": {\n  "url": "http://localhost:8081"\n}`,
                 color: "#7c3aed",
               },
               {

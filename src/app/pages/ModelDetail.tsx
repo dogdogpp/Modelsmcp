@@ -44,7 +44,7 @@ export function ModelDetail() {
   const installCmd = `pip install deepmcp\ndeep pull ${model.id}`;
   const pythonExample = `import deepmcp
 
-client = deepmcp.Client("http://localhost:8080")
+client = deepmcp.Client("http://localhost:8081")
 
 result = client.call("${model.mcpTool}", {
     "image": "https://example.com/image.jpg",
@@ -363,7 +363,7 @@ print(result)`;
   "mcpServers": {
     "deepmcp": {
       "command": "deepmcp",
-      "args": ["serve", "--port", "8080"],
+      "args": ["serve", "--port", "8081"],
       "env": {
         "DEEPMCP_MODELS": "${model.id}",
         "DEEPMCP_DEVICE": "cuda"
@@ -385,7 +385,7 @@ print(result)`;
                   <div className="p-4 overflow-x-auto">
                     <pre className="text-xs font-mono text-gray-300 leading-relaxed">{`mcp_servers:
   deepmcp:
-    url: "http://localhost:8080/mcp"
+    url: "http://localhost:8081/mcp"
     tools:
       - ${model.mcpTool}
     auth:
