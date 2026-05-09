@@ -13,6 +13,7 @@ import asyncio
 import hmac
 import socket
 import time
+import uuid
 from contextlib import asynccontextmanager
 
 import base64
@@ -261,23 +262,98 @@ def metrics():
 
 
 # ---------------------------------------------------------------------------
-# SSE streaming endpoint
+# MCP SSE transport endpoint (standard MCP HTTP+SSE transport)
 # ---------------------------------------------------------------------------
 
-async def _sse_stream():
-    """Mock SSE stream for OpenClaw progress / result / error events."""
-    yield "event: progress\ndata: {\"status\": \"initializing\"}\n\n"
-    await asyncio.sleep(0.01)
-    yield "event: progress\ndata: {\"status\": \"running\"}\n\n"
-    await asyncio.sleep(0.01)
-    yield "event: result\ndata: {\"status\": \"done\"}\n\n"
-    await asyncio.sleep(0.01)
-    yield "event: error\ndata: {\"status\": \"stream_closed\"}\n\n"
+_mcp_sessions: dict[str, asyncio.Queue[str | None]] = {}
 
 
 @app.get("/sse")
-async def sse_endpoint():
-    return StreamingResponse(_sse_stream(), media_type="text/event-stream")
+async def mcp_sse_endpoint(raw_request: Request):
+    """MCP SSE transport endpoint.
+
+    Follows the standard MCP HTTP+SSE transport protocol:
+    1. Client connects via GET /sse
+    2. Server sends ``event: endpoint`` with a JSON-RPC POST URL
+    3. Client POSTs JSON-RPC messages to that URL
+    4. Server may push responses back through this SSE connection
+    """
+    session_id = str(uuid.uuid4())
+    queue: asyncio.Queue[str | None] = asyncio.Queue()
+    _mcp_sessions[session_id] = queue
+
+    async def event_stream():
+        try:
+            # Send the endpoint event so the client knows where to POST messages
+            endpoint_url = f"/messages?session_id={session_id}"
+            yield f"event: endpoint\ndata: {endpoint_url}\n\n"
+
+            # Keep connection alive and forward any queued messages
+            while True:
+                if await raw_request.is_disconnected():
+                    break
+                try:
+                    msg = await asyncio.wait_for(queue.get(), timeout=15.0)
+                    if msg is None:
+                        break
+                    yield msg
+                except asyncio.TimeoutError:
+                    yield format_sse("heartbeat", {})
+        finally:
+            _mcp_sessions.pop(session_id, None)
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@app.post("/messages", dependencies=[Depends(verify_api_key)])
+async def mcp_messages(session_id: str = Query(...), raw_request: Request = None):
+    """Receive JSON-RPC messages for MCP SSE transport."""
+    body = await raw_request.json()
+
+    method = body.get("method", "")
+    params = body.get("params", {})
+    req_id = body.get("id")
+
+    if method == "tools/list":
+        tools_response = get_tools()
+        result = {
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "result": tools_response.model_dump(),
+        }
+    elif method == "tools/call":
+        tool_name = params.get("name", "")
+        arguments = params.get("arguments", {})
+        response = call_tool(CallRequest(tool=tool_name, arguments=arguments))
+        result = {
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "result": response.model_dump(),
+        }
+    else:
+        result = {
+            "jsonrpc": "2.0",
+            "id": req_id,
+            "error": {
+                "code": -32601,
+                "message": f"Method not found: {method}",
+            },
+        }
+
+    # Also push the response to the SSE queue so the client can receive it via SSE
+    queue = _mcp_sessions.get(session_id)
+    if queue is not None:
+        await queue.put(f"event: message\ndata: {json.dumps(result)}\n\n")
+
+    return result
 
 
 # ---------------------------------------------------------------------------
