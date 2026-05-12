@@ -12,10 +12,10 @@ import {
   Clock,
   Filter,
   Server,
-  Wifi,
-  WifiOff,
   AlertTriangle,
   Layers,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import {
   AreaChart,
@@ -54,19 +54,6 @@ function formatTime(iso: string) {
     minute: "2-digit",
     second: "2-digit",
   });
-}
-
-function statusIcon(status: CommStatus) {
-  switch (status) {
-    case "success":
-      return <CheckCircle size={14} className="text-green-400" />;
-    case "error":
-      return <AlertCircle size={14} className="text-red-400" />;
-    case "timeout":
-      return <Clock size={14} className="text-amber-400" />;
-    case "pending":
-      return <Activity size={14} className="text-cyan-400 animate-pulse" />;
-  }
 }
 
 function statusBadge(status: CommStatus) {
@@ -140,6 +127,8 @@ export function Subscriptions() {
   const [filterDirection, setFilterDirection] = useState<CommDirection | "all">("all");
   const [filterMode, setFilterMode] = useState<CommMode | "all">("all");
   const [filterStatus, setFilterStatus] = useState<CommStatus | "all">("all");
+  const [filterTimeRange, setFilterTimeRange] = useState<string>("all");
+  const [expandedLogIds, setExpandedLogIds] = useState<Set<string>>(new Set());
 
   const activeModels = subscriptionModels.filter((m) => m.status === "active");
   const errorModels = subscriptionModels.filter((m) => m.status === "error");
@@ -163,14 +152,20 @@ export function Subscriptions() {
   };
 
   const filteredLogs = useMemo(() => {
+    const now = Date.now();
     return logs.filter((log) => {
       if (filterModel !== "all" && log.modelId !== filterModel) return false;
       if (filterDirection !== "all" && log.direction !== filterDirection) return false;
       if (filterMode !== "all" && log.mode !== filterMode) return false;
       if (filterStatus !== "all" && log.status !== filterStatus) return false;
+      if (filterTimeRange !== "all") {
+        const logTime = new Date(log.timestamp).getTime();
+        const minutes = parseInt(filterTimeRange, 10);
+        if (now - logTime > minutes * 60 * 1000) return false;
+      }
       return true;
     });
-  }, [logs, filterModel, filterDirection, filterMode, filterStatus]);
+  }, [logs, filterModel, filterDirection, filterMode, filterStatus, filterTimeRange]);
 
   // Auto-scroll to top of log list effect could go here
   const [liveMode, setLiveMode] = useState(true);
@@ -179,6 +174,7 @@ export function Subscriptions() {
     const interval = setInterval(() => {
       setLogs((prev) => {
         const next = generateLogs(1)[0];
+        next.id = `log-live-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
         next.timestamp = new Date().toISOString();
         return [next, ...prev].slice(0, 200);
       });
@@ -632,6 +628,16 @@ export function Subscriptions() {
               <option value="error">失败</option>
               <option value="timeout">超时</option>
             </select>
+            <select
+              value={filterTimeRange}
+              onChange={(e) => setFilterTimeRange(e.target.value)}
+              className="px-3 py-1.5 rounded-lg bg-[#0f1520] border border-white/10 text-gray-300 text-xs focus:outline-none focus:border-cyan-500/50"
+            >
+              <option value="all">全部时间</option>
+              <option value="1">最近 1 分钟</option>
+              <option value="5">最近 5 分钟</option>
+              <option value="15">最近 15 分钟</option>
+            </select>
           </div>
 
           {/* Log list */}
@@ -654,34 +660,102 @@ export function Subscriptions() {
                   无匹配日志
                 </div>
               ) : (
-                filteredLogs.map((log, i) => (
-                  <motion.div
-                    key={log.id}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: Math.min(i * 0.01, 0.3) }}
-                    className="grid grid-cols-1 md:grid-cols-12 gap-2 md:gap-4 px-5 py-3 border-b border-white/5 last:border-0 hover:bg-white/[0.02] transition-colors items-start md:items-center"
-                  >
-                    <div className="md:col-span-1 text-gray-500 text-xs">{formatTime(log.timestamp)}</div>
-                    <div className="md:col-span-1 text-white text-xs" style={{ fontWeight: 500 }}>
-                      {log.modelName}
-                    </div>
-                    <div className="md:col-span-2">{directionBadge(log.direction)}</div>
-                    <div className="md:col-span-1 text-gray-400 text-xs">{log.type}</div>
-                    <div className="md:col-span-1 text-gray-400 text-xs">{log.mode}</div>
-                    <div className="md:col-span-1">{statusBadge(log.status)}</div>
-                    <div className="md:col-span-1 text-cyan-400 text-xs" style={{ fontWeight: 500 }}>
-                      {log.latencyMs}ms
-                    </div>
-                    <div className="md:col-span-1 text-gray-500 text-xs">{(log.payloadSize / 1024).toFixed(1)}KB</div>
-                    <div className="md:col-span-3 text-gray-300 text-xs truncate">
-                      {log.summary}
-                      {log.errorMessage && (
-                        <span className="block text-red-400 text-[10px] mt-0.5">{log.errorMessage}</span>
+                filteredLogs.map((log, i) => {
+                  const isExpanded = expandedLogIds.has(log.id);
+                  return (
+                    <motion.div
+                      key={log.id}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: Math.min(i * 0.01, 0.3) }}
+                      className="border-b border-white/5 last:border-0 hover:bg-white/[0.02] transition-colors"
+                    >
+                      <div
+                        className="grid grid-cols-1 md:grid-cols-12 gap-2 md:gap-4 px-5 py-3 items-start md:items-center cursor-pointer"
+                        onClick={() =>
+                          setExpandedLogIds((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(log.id)) next.delete(log.id);
+                            else next.add(log.id);
+                            return next;
+                          })
+                        }
+                      >
+                        <div className="md:col-span-1 flex items-center gap-1 text-gray-500 text-xs">
+                          {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                          {formatTime(log.timestamp)}
+                        </div>
+                        <div className="md:col-span-1 text-white text-xs" style={{ fontWeight: 500 }}>
+                          {log.modelName}
+                        </div>
+                        <div className="md:col-span-2">{directionBadge(log.direction)}</div>
+                        <div className="md:col-span-1 text-gray-400 text-xs">{log.type}</div>
+                        <div className="md:col-span-1 text-gray-400 text-xs">{log.mode}</div>
+                        <div className="md:col-span-1">{statusBadge(log.status)}</div>
+                        <div className="md:col-span-1 text-cyan-400 text-xs" style={{ fontWeight: 500 }}>
+                          {log.latencyMs}ms
+                        </div>
+                        <div className="md:col-span-1 text-gray-500 text-xs">{(log.payloadSize / 1024).toFixed(1)}KB</div>
+                        <div className="md:col-span-3 text-gray-300 text-xs truncate">
+                          {log.summary}
+                          {log.errorMessage && (
+                            <span className="block text-red-400 text-[10px] mt-0.5">{log.errorMessage}</span>
+                          )}
+                        </div>
+                      </div>
+                      {isExpanded && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: "auto", opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          className="px-5 pb-4 overflow-hidden"
+                        >
+                          <div className="p-4 rounded-xl border border-white/5 bg-[#0a0f18] space-y-3">
+                            <div className="flex items-center gap-4">
+                              <div className="flex items-center gap-2">
+                                <div className="w-2 h-2 rounded-full bg-cyan-400" />
+                                <span className="text-gray-400 text-xs">请求发送</span>
+                              </div>
+                              <div className="flex-1 h-px bg-white/5" />
+                              <div className="flex items-center gap-2">
+                                <div className={`w-2 h-2 rounded-full ${log.status === "success" ? "bg-green-400" : log.status === "pending" ? "bg-cyan-400 animate-pulse" : "bg-red-400"}`} />
+                                <span className="text-gray-400 text-xs">{log.status === "pending" ? "处理中" : log.status === "success" ? "处理完成" : "处理异常"}</span>
+                              </div>
+                              <div className="flex-1 h-px bg-white/5" />
+                              <div className="flex items-center gap-2">
+                                <div className={`w-2 h-2 rounded-full ${log.status === "success" ? "bg-green-400" : log.status === "pending" ? "bg-gray-600" : "bg-red-400"}`} />
+                                <span className="text-gray-400 text-xs">{log.status === "pending" ? "等待回调" : "回调完成"}</span>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                              <div className="p-2 rounded-lg border border-white/5 bg-white/[0.02]">
+                                <div className="text-gray-500 text-[10px]">Payload 大小</div>
+                                <div className="text-white text-xs mt-0.5">{(log.payloadSize / 1024).toFixed(2)} KB</div>
+                              </div>
+                              <div className="p-2 rounded-lg border border-white/5 bg-white/[0.02]">
+                                <div className="text-gray-500 text-[10px]">延迟</div>
+                                <div className="text-white text-xs mt-0.5">{log.latencyMs} ms</div>
+                              </div>
+                              <div className="p-2 rounded-lg border border-white/5 bg-white/[0.02]">
+                                <div className="text-gray-500 text-[10px]">通信模式</div>
+                                <div className="text-white text-xs mt-0.5">{log.mode}</div>
+                              </div>
+                              <div className="p-2 rounded-lg border border-white/5 bg-white/[0.02]">
+                                <div className="text-gray-500 text-[10px]">方向</div>
+                                <div className="text-white text-xs mt-0.5">{log.direction === "mcp-to-openclaw" ? "DeepMCP → OpenClaw" : "OpenClaw → DeepMCP"}</div>
+                              </div>
+                            </div>
+                            {log.errorMessage && (
+                              <div className="p-2 rounded-lg bg-red-500/5 border border-red-500/10 text-red-400 text-xs">
+                                {log.errorMessage}
+                              </div>
+                            )}
+                          </div>
+                        </motion.div>
                       )}
-                    </div>
-                  </motion.div>
-                ))
+                    </motion.div>
+                  );
+                })
               )}
             </div>
           </div>
@@ -694,7 +768,7 @@ export function Subscriptions() {
           </h2>
           <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-5 space-y-4">
             {logs
-              .filter((l) => l.status !== "heartbeat")
+              .filter((l) => l.type !== "heartbeat")
               .slice(0, 8)
               .map((log, i) => (
                 <motion.div
