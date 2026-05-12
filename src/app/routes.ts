@@ -7,6 +7,7 @@ import { Playground } from "./pages/Playground";
 import { Docs } from "./pages/Docs";
 import { Status } from "./pages/Status";
 import { Subscriptions } from "./pages/Subscriptions";
+import { CommunicationSettings } from "./pages/CommunicationSettings";
 
 export const router = createBrowserRouter([
   {
@@ -20,6 +21,7 @@ export const router = createBrowserRouter([
       { path: "docs", Component: Docs },
       { path: "status", Component: Status },
       { path: "subscriptions", Component: Subscriptions },
+      { path: "settings/communication", Component: CommunicationSettings },
     ],
   },
 ]);
