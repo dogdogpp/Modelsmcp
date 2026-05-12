@@ -10,7 +10,14 @@ import {
   X,
   Github,
   Terminal,
+  Settings,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "./ui/dropdown-menu";
 
 const navItems = [
   { to: "/", label: "首页", end: true },
@@ -23,6 +30,8 @@ const navItems = [
 export function Layout() {
   const [menuOpen, setMenuOpen] = useState(false);
   const location = useLocation();
+
+  const isSettingsActive = location.pathname.startsWith("/settings");
 
   return (
     <div className="min-h-screen bg-[#080b14] text-white">
@@ -75,6 +84,36 @@ export function Layout() {
                 <Github size={16} />
                 <span>GitHub</span>
               </a>
+
+              {/* Settings dropdown */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    className={`p-2 rounded-lg text-sm transition-all ${
+                      isSettingsActive
+                        ? "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20"
+                        : "text-gray-400 hover:text-white hover:bg-white/5"
+                    }`}
+                  >
+                    <Settings size={16} />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="end"
+                  className="bg-[#0c111a] border-white/10 text-white min-w-[10rem]"
+                >
+                  <NavLink
+                    to="/settings/communication"
+                    className="outline-none"
+                  >
+                    <DropdownMenuItem className="hover:bg-white/5 focus:bg-white/5 focus:text-white cursor-pointer text-gray-300">
+                      <Activity size={14} className="text-cyan-400" />
+                      <span>通信设置</span>
+                    </DropdownMenuItem>
+                  </NavLink>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
               <NavLink
                 to="/playground"
                 className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 text-white text-sm rounded-lg hover:opacity-90 transition-opacity"
@@ -114,6 +153,18 @@ export function Layout() {
                 {item.label}
               </NavLink>
             ))}
+            <NavLink
+              to="/settings/communication"
+              onClick={() => setMenuOpen(false)}
+              className={`px-4 py-2.5 rounded-lg text-sm transition-all flex items-center gap-2 ${
+                isSettingsActive
+                  ? "bg-cyan-500/10 text-cyan-400"
+                  : "text-gray-400 hover:text-white hover:bg-white/5"
+              }`}
+            >
+              <Settings size={14} />
+              通信设置
+            </NavLink>
           </div>
         )}
       </nav>
