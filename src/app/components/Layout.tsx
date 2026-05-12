@@ -18,6 +18,7 @@ const navItems = [
   { to: "/playground", label: "Playground" },
   { to: "/docs", label: "文档" },
   { to: "/status", label: "状态" },
+  { to: "/settings/communication", label: "设置" },
 ];
 
 export function Layout() {

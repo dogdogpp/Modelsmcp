@@ -6,6 +6,7 @@ import { ModelDetail } from "./pages/ModelDetail";
 import { Playground } from "./pages/Playground";
 import { Docs } from "./pages/Docs";
 import { Status } from "./pages/Status";
+import { SettingsCommunication } from "./pages/SettingsCommunication";
 
 export const router = createBrowserRouter([
   {
@@ -18,6 +19,7 @@ export const router = createBrowserRouter([
       { path: "playground", Component: Playground },
       { path: "docs", Component: Docs },
       { path: "status", Component: Status },
+      { path: "settings/communication", Component: SettingsCommunication },
     ],
   },
 ]);
