@@ -11,9 +11,11 @@ if str(_project_root) not in sys.path:
 
 import asyncio
 import hmac
+import random
 import socket
 import time
 import uuid
+from datetime import datetime, timedelta
 from contextlib import asynccontextmanager
 
 import base64
@@ -23,6 +25,8 @@ from fastapi import FastAPI, File, Form, HTTPException, Depends, Security, Uploa
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.security.api_key import APIKeyHeader
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import (
     CORS_ORIGINS, HOST, MOCK_MODE, PORT, API_KEY,
@@ -31,12 +35,40 @@ from config import (
     WEBHOOK_TIMEOUT, WEBHOOK_MAX_RETRIES,
     WEBHOOK_DEDUP_WINDOW_SECONDS, WEBHOOK_DB_PATH,
     WEBHOOK_BACKOFF_BASE_SECONDS,
+    COMMUNICATION_LOG_RETENTION_DAYS,
+    METRICS_COLLECTION_INTERVAL,
 )
 from mcp.server import init_tools, get_tools, call_tool, call_tool_stream, get_health, get_metrics
-from mcp.protocol import CallRequest, SseCallRequest, format_sse
+from mcp.protocol import (
+    CallRequest, SseCallRequest, format_sse,
+    Incident as IncidentSchema,
+    ModelStatusResponse, ModelPerformance,
+    Subscription as SubscriptionSchema,
+    CommunicationLog as CommunicationLogSchema,
+    SubscriptionsMetrics, LatencyDistribution, ModeRatio, ThroughputHistoryPoint,
+)
 from camera import CameraManager
 from webhook import WebhookQueue
 from mcp.server import set_webhook_queue
+
+# Database imports
+from db import init_db, engine, get_db, ensure_partitions
+from db.crud import (
+    get_incidents,
+    get_metrics_history,
+    get_models_performance,
+    get_communication_logs,
+    get_subscriptions,
+    get_latest_subscription_aggregates,
+    get_latency_distribution,
+    get_mode_ratios,
+    create_metrics_batch,
+    create_subscription_aggregate,
+)
+
+# APScheduler
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.interval import IntervalTrigger
 
 # Optionally register real-mode model handlers (Whisper / YOLO) into server.models registry.
 # Failures (missing optional deps like `whisper` or `ultralytics`) must not crash the server.
@@ -64,8 +96,134 @@ async def verify_api_key(api_key: str = Security(api_key_header)):
     return api_key
 
 
+# ---------------------------------------------------------------------------
+# Background metrics collection job
+# ---------------------------------------------------------------------------
+
+async def _collect_metrics_job():
+    """APScheduler job: collect system metrics and subscription aggregates."""
+    from db.engine import AsyncSessionLocal
+    async with AsyncSessionLocal() as session:
+        now = datetime.utcnow()
+        partition_key = now.strftime("%Y-%m")
+
+        # 1. System metrics (GPU/CPU/disk)
+        # For now, read from get_metrics() mock and persist
+        metrics_data = get_metrics()
+        batch = []
+
+        # Latency
+        batch.append({
+            "timestamp": now,
+            "metric_type": "latency",
+            "metric_name": "avg_ms",
+            "value": metrics_data.latency["avg_ms"],
+            "extra_data": {"p50": metrics_data.latency["p50_ms"], "p99": metrics_data.latency["p99_ms"]},
+            "partition_key": partition_key,
+        })
+
+        # Throughput
+        batch.append({
+            "timestamp": now,
+            "metric_type": "throughput",
+            "metric_name": "req_per_sec",
+            "value": metrics_data.throughput["req_per_sec"],
+            "partition_key": partition_key,
+        })
+
+        # System resources
+        sys_data = metrics_data.system
+        batch.append({
+            "timestamp": now,
+            "metric_type": "system",
+            "metric_name": "gpu_utilization",
+            "value": sys_data["gpu_utilization"],
+            "partition_key": partition_key,
+        })
+        batch.append({
+            "timestamp": now,
+            "metric_type": "system",
+            "metric_name": "gpu_memory_used_gb",
+            "value": sys_data["gpu_memory_used_gb"],
+            "partition_key": partition_key,
+        })
+        batch.append({
+            "timestamp": now,
+            "metric_type": "system",
+            "metric_name": "cpu_utilization",
+            "value": sys_data["cpu_utilization"],
+            "partition_key": partition_key,
+        })
+        batch.append({
+            "timestamp": now,
+            "metric_type": "system",
+            "metric_name": "disk_used_gb",
+            "value": sys_data["disk_used_gb"],
+            "partition_key": partition_key,
+        })
+
+        await create_metrics_batch(session, batch)
+
+        # 2. Model performance jitter (update DB with slight variations)
+        from mcp.server import _MOCK_MODEL_STATUS
+        perf_map = {
+            "yolo26": (12.0, 83.0),
+            "detr": (38.0, 26.0),
+            "paddleocr": (45.0, 22.0),
+            "sam2": (23.0, 44.0),
+            "clip": (18.0, 55.0),
+            "whisper": (320.0, 3.1),
+            "depth_anything": (35.0, 28.0),
+            "dinov2": (28.0, 35.0),
+            "yolov8_pose": (15.0, 66.0),
+            "grounding_dino": (55.0, 18.0),
+        }
+        for model_id in _MOCK_MODEL_STATUS:
+            base_lat, base_tput = perf_map.get(model_id, (25.0, 40.0))
+            latency = round(base_lat + random.uniform(-1.5, 1.5), 1)
+            throughput = round(base_tput + random.uniform(-2.0, 2.0), 1)
+            await session.execute(
+                text("UPDATE models SET latency_ms = :lat, throughput_rps = :tput, updated_at = NOW() WHERE id = :id"),
+                {"lat": latency, "tput": throughput, "id": model_id},
+            )
+        await session.commit()
+
+        # 3. Subscription aggregates (latency distribution, mode ratios)
+        lat_dist = await get_latency_distribution(session)
+        await create_subscription_aggregate(
+            session,
+            timestamp=now,
+            metric_type="latency_dist",
+            data=lat_dist,
+        )
+
+        mode_ratios = await get_mode_ratios(session)
+        await create_subscription_aggregate(
+            session,
+            timestamp=now,
+            metric_type="mode_ratio",
+            data={m["mode"]: {"count": m["count"], "percentage": m["percentage"]} for m in mode_ratios},
+        )
+
+        # Throughput aggregate
+        await create_subscription_aggregate(
+            session,
+            timestamp=now,
+            metric_type="throughput",
+            data={"inbound": round(40 + random.uniform(-10, 10), 1),
+                  "outbound": round(20 + random.uniform(-5, 5), 1)},
+        )
+
+        # 4. Ensure partitions exist and cleanup old ones
+        await ensure_partitions(engine, retention_days=COMMUNICATION_LOG_RETENTION_DAYS)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Initialize database (tables, partitions, seed)
+    await init_db(engine, retention_days=COMMUNICATION_LOG_RETENTION_DAYS)
+    print("[DeepMCP] Database initialized.")
+
     webhook_queue = None
     if OPENCLAW_WEBHOOK_URL:
         webhook_queue = WebhookQueue(
@@ -97,8 +255,22 @@ async def lifespan(app: FastAPI):
     init_tools(MOCK_MODE, camera_manager)
     app.state.camera_manager = camera_manager
     app.state.webhook_queue = webhook_queue
+
+    # Start APScheduler background metrics collector
+    scheduler = AsyncIOScheduler()
+    scheduler.add_job(
+        _collect_metrics_job,
+        trigger=IntervalTrigger(seconds=METRICS_COLLECTION_INTERVAL),
+        id="metrics_collector",
+        replace_existing=True,
+    )
+    scheduler.start()
+    print(f"[DeepMCP] Metrics collector started (interval={METRICS_COLLECTION_INTERVAL}s).")
+
     print("[DeepMCP] Server started. Mock mode:", MOCK_MODE)
     yield
+
+    scheduler.shutdown(wait=False)
     if camera_manager is not None:
         camera_manager.stop_all()
     if webhook_queue is not None:
@@ -510,6 +682,172 @@ async def camera_websocket(
         pass
     except Exception:
         pass
+
+
+# ---------------------------------------------------------------------------
+# Incident / Event endpoints (DB-backed)
+# ---------------------------------------------------------------------------
+
+@app.get("/incidents")
+async def list_incidents(session: AsyncSession = Depends(get_db)):
+    """Return recent system events and incidents from DB."""
+    rows = await get_incidents(session, limit=50)
+    return [
+        IncidentSchema(
+            id=r.id,
+            time=r.time,
+            type=r.type,
+            msg=r.msg,
+            source=r.source,
+        )
+        for r in rows
+    ]
+
+
+# ---------------------------------------------------------------------------
+# Model performance endpoint (DB-backed)
+# ---------------------------------------------------------------------------
+
+@app.get("/models/status")
+async def model_status(session: AsyncSession = Depends(get_db)):
+    """Return per-model latency and throughput metrics from DB."""
+    rows = await get_models_performance(session)
+    models = []
+    for r in rows:
+        models.append(ModelPerformance(
+            id=r.id,
+            latency_ms=round(r.latency_ms, 1),
+            throughput_rps=round(r.throughput_rps, 1),
+        ))
+    return ModelStatusResponse(models=models)
+
+
+# ---------------------------------------------------------------------------
+# Subscription endpoints (DB-backed)
+# ---------------------------------------------------------------------------
+
+@app.get("/subscriptions")
+async def list_subscriptions(session: AsyncSession = Depends(get_db)):
+    """Return the list of model subscriptions from DB."""
+    rows = await get_subscriptions(session)
+    return [
+        SubscriptionSchema(
+            id=r.id,
+            model_id=r.model_id,
+            model_name=r.model_name,
+            status=r.status,
+            subscribed_at=r.subscribed_at.isoformat(),
+            last_active_at=r.last_active_at.isoformat(),
+            total_calls=r.total_calls,
+            success_rate=r.success_rate,
+            avg_latency_ms=r.avg_latency_ms,
+        )
+        for r in rows
+    ]
+
+
+@app.get("/subscriptions/logs")
+async def list_subscription_logs(
+    session: AsyncSession = Depends(get_db),
+    limit: int = Query(50, ge=1, le=200),
+):
+    """Return communication logs for subscriptions from DB."""
+    rows = await get_communication_logs(session, limit=limit)
+    return [
+        CommunicationLogSchema(
+            id=r.id,
+            timestamp=r.timestamp.isoformat(),
+            model_id=r.model_id,
+            model_name=r.model_name,
+            direction=r.direction,
+            type=r.log_type,
+            mode=r.mode,
+            status=r.status,
+            latency_ms=r.latency_ms,
+            payload_size_bytes=r.payload_size_bytes,
+            summary=r.summary,
+        )
+        for r in rows
+    ]
+
+
+@app.get("/subscriptions/metrics")
+async def subscription_metrics(session: AsyncSession = Depends(get_db)):
+    """Return aggregated subscription metrics from DB."""
+    aggregates = await get_latest_subscription_aggregates(session)
+
+    lat_dist = LatencyDistribution(p50_ms=0.0, p95_ms=0.0, p99_ms=0.0)
+    mode_data = []
+    throughput_data = []
+
+    for agg in aggregates:
+        if agg.metric_type == "latency_dist":
+            lat_dist = LatencyDistribution(
+                p50_ms=agg.data.get("p50_ms", 0.0),
+                p95_ms=agg.data.get("p95_ms", 0.0),
+                p99_ms=agg.data.get("p99_ms", 0.0),
+            )
+        elif agg.metric_type == "mode_ratio":
+            for mode, info in agg.data.items():
+                mode_data.append(ModeRatio(
+                    mode=mode,
+                    count=info.get("count", 0),
+                    percentage=info.get("percentage", 0.0),
+                ))
+        elif agg.metric_type == "throughput":
+            # Return recent throughput history from aggregates
+            throughput_data.append(ThroughputHistoryPoint(
+                timestamp=agg.timestamp.isoformat(),
+                inbound=agg.data.get("inbound", 0.0),
+                outbound=agg.data.get("outbound", 0.0),
+            ))
+
+    # Fallback if no aggregates found
+    if not mode_data:
+        mode_data = [
+            ModeRatio(mode="HTTP", count=0, percentage=0.0),
+        ]
+
+    # Build a simple throughput history (last 20 aggregates)
+    # For now, return what we have; frontend expects a list
+    if len(throughput_data) < 20:
+        # Fill with the same point repeated for visual continuity
+        last = throughput_data[-1] if throughput_data else ThroughputHistoryPoint(
+            timestamp=datetime.utcnow().isoformat(), inbound=0.0, outbound=0.0,
+        )
+        while len(throughput_data) < 20:
+            throughput_data.insert(0, last)
+
+    return SubscriptionsMetrics(
+        latency_distribution=lat_dist,
+        mode_ratios=mode_data,
+        throughput_history=throughput_data[-20:],
+    )
+
+
+# ---------------------------------------------------------------------------
+# Metrics endpoint (DB-backed history)
+# ---------------------------------------------------------------------------
+
+@app.get("/metrics/history")
+async def metrics_history(
+    session: AsyncSession = Depends(get_db),
+    metric_type: str = Query(...),
+    metric_name: str | None = Query(None),
+    hours: int = Query(24, ge=1, le=168),
+):
+    """Return time-series metrics from DB."""
+    rows = await get_metrics_history(session, metric_type=metric_type, metric_name=metric_name, hours=hours)
+    return [
+        {
+            "timestamp": r.timestamp.isoformat(),
+            "metric_type": r.metric_type,
+            "metric_name": r.metric_name,
+            "value": r.value,
+            "extra_data": r.extra_data,
+        }
+        for r in rows
+    ]
 
 
 def _find_available_port(preferred: int, max_tries: int = 10) -> int:

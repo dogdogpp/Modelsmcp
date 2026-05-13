@@ -1,0 +1,44 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: deepmcp-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: deepmcp
+      POSTGRES_PASSWORD: deepmcp
+      POSTGRES_DB: deepmcp
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U deepmcp -d deepmcp"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - deepmcp
+
+  # Optional: run the backend server alongside the DB
+  # backend:
+  #   build:
+  #     context: .
+  #     dockerfile: server/Dockerfile
+  #   container_name: deepmcp-backend
+  #   restart: unless-stopped
+  #   environment:
+  #     DATABASE_URL: postgresql+asyncpg://deepmcp:deepmcp@postgres:5432/deepmcp
+  #   ports:
+  #     - "8081:8081"
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #   networks:
+  #     - deepmcp
+
+volumes:
+  postgres_data:
+
+networks:
+  deepmcp:
+    driver: bridge

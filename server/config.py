@@ -48,6 +48,20 @@ WEBHOOK_DEDUP_WINDOW_SECONDS = float(os.getenv("DEEPMCP_WEBHOOK_DEDUP_WINDOW_SEC
 WEBHOOK_DB_PATH = os.getenv("DEEPMCP_WEBHOOK_DB_PATH", str(BASE_DIR / "webhook_queue.db"))
 WEBHOOK_BACKOFF_BASE_SECONDS = float(os.getenv("DEEPMCP_WEBHOOK_BACKOFF_BASE_SECONDS", "1.0"))
 
+# Database configuration
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "postgresql+asyncpg://deepmcp:deepmcp@localhost:5433/deepmcp",
+)
+DB_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "20"))
+DB_MAX_OVERFLOW = int(os.getenv("DB_MAX_OVERFLOW", "10"))
+
+# Data retention (days)
+COMMUNICATION_LOG_RETENTION_DAYS = int(os.getenv("COMMUNICATION_LOG_RETENTION_DAYS", "7"))
+
+# Background metrics collection interval (seconds)
+METRICS_COLLECTION_INTERVAL = float(os.getenv("METRICS_COLLECTION_INTERVAL", "15"))
+
 # Model-specific configs
 MODEL_CONFIG = {
     "yolo26": {"enabled": True, "variant": "yolo26n", "classes": 80},
