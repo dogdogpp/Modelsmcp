@@ -66,6 +66,13 @@ def get_settings() -> dict:
     return _load()
 
 
+def is_enabled(key: str) -> bool:
+    """Return True if the given switch key is enabled."""
+    if key not in DEFAULT_SETTINGS:
+        return False
+    return _load()["switches"].get(key, DEFAULT_SETTINGS[key])  # type: ignore[literal-required]
+
+
 def set_switch(key: str, value: bool, actor: str = "当前用户") -> dict:
     """Toggle a single switch and append an operation log entry."""
     if key not in DEFAULT_SETTINGS:

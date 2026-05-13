@@ -362,5 +362,5 @@ class CameraManager:
             "class_name": event.class_name,
         }
         self._webhook_queue.enqueue(
-            event.camera_id, event.class_name, payload, confidence=event.confidence
+            event.camera_id, event.class_name, payload, confidence=event.confidence, switch_key="feishu_push"
         )
