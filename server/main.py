@@ -36,6 +36,7 @@ from mcp.protocol import CallRequest, SseCallRequest, format_sse
 from camera import CameraManager
 from webhook import WebhookQueue
 from mcp.server import set_webhook_queue
+import communication_settings as comm_settings
 
 # Optionally register real-mode model handlers (Whisper / YOLO) into server.models registry.
 # Failures (missing optional deps like `whisper` or `ultralytics`) must not crash the server.
@@ -421,6 +422,25 @@ async def camera_websocket(
         pass
     except Exception:
         pass
+
+
+# ---------------------------------------------------------------------------
+# Communication settings endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/settings/communication", dependencies=[Depends(verify_api_key)])
+def get_communication_settings():
+    """Return current communication switch states and operation logs."""
+    return comm_settings.get_settings()
+
+
+@app.post("/settings/communication/{key}", dependencies=[Depends(verify_api_key)])
+def update_communication_switch(key: str, value: bool = Body(..., embed=True)):
+    """Toggle a single communication switch and record the operation log."""
+    try:
+        return comm_settings.set_switch(key, value)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 def _find_available_port(preferred: int, max_tries: int = 10) -> int:
