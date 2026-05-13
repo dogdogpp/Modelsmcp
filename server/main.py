@@ -38,7 +38,7 @@ from config import (
     COMMUNICATION_LOG_RETENTION_DAYS,
     METRICS_COLLECTION_INTERVAL,
 )
-from mcp.server import init_tools, get_tools, call_tool, call_tool_stream, get_health, get_metrics
+from mcp.server import init_tools, get_tools, call_tool, call_tool_stream, get_metrics
 from mcp.protocol import (
     CallRequest, SseCallRequest, format_sse,
     Incident as IncidentSchema,
@@ -46,6 +46,7 @@ from mcp.protocol import (
     Subscription as SubscriptionSchema,
     CommunicationLog as CommunicationLogSchema,
     SubscriptionsMetrics, LatencyDistribution, ModeRatio, ThroughputHistoryPoint,
+    MetricsDataPoint,
 )
 from camera import CameraManager
 from webhook import WebhookQueue
@@ -296,8 +297,22 @@ app.add_middleware(
 
 
 @app.get("/health")
-def health():
-    return get_health()
+async def health(session: AsyncSession = Depends(get_db)):
+    """Return health status with model list from PostgreSQL."""
+    models = await get_models_performance(session)
+    return HealthResponse(
+        status="healthy",
+        version="0.1.0",
+        uptime="up",
+        models=[
+            HealthModelInfo(
+                id=m.id,
+                name=m.name,
+                status=m.status,  # type: ignore[arg-type]
+            )
+            for m in models
+        ],
+    )
 
 
 @app.get("/tools")
@@ -429,8 +444,75 @@ to the specified tool as the 'image' or 'audio' argument."""
 
 
 @app.get("/metrics", dependencies=[Depends(verify_api_key)])
-def metrics():
-    return get_metrics()
+async def metrics(session: AsyncSession = Depends(get_db)):
+    """Return metrics from PostgreSQL with webhook data from memory."""
+    from sqlalchemy import select, desc
+    from db.models import Metric
+
+    # 1. System resources — latest value for each metric_name
+    system = {
+        "gpu_utilization": 0,
+        "gpu_memory_used_gb": 0.0,
+        "gpu_memory_total_gb": 24.0,
+        "cpu_utilization": 0,
+        "disk_used_gb": 0.0,
+    }
+    for name in ["gpu_utilization", "gpu_memory_used_gb", "cpu_utilization", "disk_used_gb"]:
+        result = await session.execute(
+            select(Metric)
+            .where(Metric.metric_type == "system", Metric.metric_name == name)
+            .order_by(desc(Metric.timestamp))
+            .limit(1)
+        )
+        row = result.scalar_one_or_none()
+        if row is not None:
+            system[name] = row.value
+
+    # 2. Latency history (last 20 points)
+    lat_rows = await get_metrics_history(
+        session, metric_type="latency", metric_name="avg_ms", hours=1
+    )
+    latency_history = [
+        MetricsDataPoint(
+            timestamp=r.timestamp.isoformat(), value=r.value
+        ).model_dump()
+        for r in lat_rows[-20:]
+    ]
+    if not latency_history:
+        latency_history = [MetricsDataPoint(timestamp=datetime.utcnow().isoformat(), value=0.0).model_dump()]
+    latest_lat = lat_rows[-1].value if lat_rows else 0.0
+
+    # 3. Throughput history (last 20 points)
+    tput_rows = await get_metrics_history(
+        session, metric_type="throughput", metric_name="req_per_sec", hours=1
+    )
+    throughput_history = [
+        MetricsDataPoint(
+            timestamp=r.timestamp.isoformat(), value=r.value
+        ).model_dump()
+        for r in tput_rows[-20:]
+    ]
+    if not throughput_history:
+        throughput_history = [MetricsDataPoint(timestamp=datetime.utcnow().isoformat(), value=0.0).model_dump()]
+    latest_tput = tput_rows[-1].value if tput_rows else 0.0
+
+    # 4. Webhook metrics (still from memory)
+    mem_metrics = get_metrics()
+
+    return {
+        "latency": {
+            "avg_ms": latest_lat,
+            "p50_ms": latest_lat,
+            "p99_ms": latest_lat,
+            "history": latency_history,
+        },
+        "throughput": {
+            "req_per_sec": latest_tput,
+            "history": throughput_history,
+        },
+        "system": system,
+        "webhook": mem_metrics.webhook,
+    }
 
 
 # ---------------------------------------------------------------------------

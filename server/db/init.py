@@ -9,7 +9,7 @@ from sqlalchemy import select
 from .engine import engine
 from .base import Base
 from .partition import ensure_partitions
-from .models import ModelMeta, Incident, Subscription, CommunicationLog, SubscriptionAggregate
+from .models import ModelMeta, Incident, Subscription, CommunicationLog, SubscriptionAggregate, Metric
 
 
 # Seed data derived from frontend models.ts
@@ -245,11 +245,51 @@ async def init_db(engine: AsyncEngine, retention_days: int = 7) -> None:
                     "Redis": {"count": 300, "percentage": 3.0},
                 },
             ))
-            session.add(SubscriptionAggregate(
-                id=uuid.uuid4(),
-                timestamp=datetime.utcnow(),
-                metric_type="throughput",
-                data={"inbound": 45.0, "outbound": 22.0},
-            ))
+            # Seed 20 throughput aggregates for smooth cold-start curve
+            now = datetime.utcnow()
+            for i in range(20):
+                ts = now - timedelta(seconds=15 * (19 - i))
+                session.add(SubscriptionAggregate(
+                    id=uuid.uuid4(),
+                    timestamp=ts,
+                    metric_type="throughput",
+                    data={
+                        "inbound": round(40.0 + i * 0.5, 1),
+                        "outbound": round(18.0 + i * 0.3, 1),
+                    },
+                ))
+
+            # Seed initial metrics so /metrics endpoint has data on first load
+            partition_key = now.strftime("%Y-%m")
+            for i in range(20):
+                ts = now - timedelta(seconds=15 * (19 - i))
+                session.add(Metric(
+                    timestamp=ts,
+                    metric_type="system",
+                    metric_name="gpu_utilization",
+                    value=round(60.0 + (i % 5) * 2, 1),
+                    partition_key=partition_key,
+                ))
+                session.add(Metric(
+                    timestamp=ts,
+                    metric_type="system",
+                    metric_name="cpu_utilization",
+                    value=round(20.0 + (i % 3), 1),
+                    partition_key=partition_key,
+                ))
+                session.add(Metric(
+                    timestamp=ts,
+                    metric_type="latency",
+                    metric_name="avg_ms",
+                    value=round(20.0 + (i % 5) * 2, 1),
+                    partition_key=partition_key,
+                ))
+                session.add(Metric(
+                    timestamp=ts,
+                    metric_type="throughput",
+                    metric_name="req_per_sec",
+                    value=round(50.0 + (i % 4) * 3, 1),
+                    partition_key=partition_key,
+                ))
 
         await session.commit()

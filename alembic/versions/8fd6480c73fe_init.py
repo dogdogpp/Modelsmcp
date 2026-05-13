@@ -34,7 +34,7 @@ def upgrade() -> None:
     sa.Column('payload_size_bytes', sa.Integer(), nullable=False),
     sa.Column('summary', sa.String(), nullable=False),
     sa.Column('partition_key', sa.String(), nullable=False),
-    sa.PrimaryKeyConstraint('partition_key'),
+    sa.PrimaryKeyConstraint('id', 'partition_key'),
     postgresql_partition_by='RANGE (partition_key)'
     )
     op.create_index('ix_logs_model_id', 'communication_logs', ['model_id'], unique=False)
@@ -57,7 +57,7 @@ def upgrade() -> None:
     sa.Column('value', sa.Float(), nullable=False),
     sa.Column('extra_data', sa.JSON(), nullable=True),
     sa.Column('partition_key', sa.String(), nullable=False),
-    sa.PrimaryKeyConstraint('partition_key'),
+    sa.PrimaryKeyConstraint('id', 'partition_key'),
     postgresql_partition_by='RANGE (partition_key)'
     )
     op.create_index('ix_metrics_timestamp', 'metrics', ['timestamp'], unique=False)

@@ -77,6 +77,8 @@ class Metric(Base):
 
     __tablename__ = "metrics"
     __table_args__ = (
+        Index("ix_metrics_timestamp", "timestamp"),
+        Index("ix_metrics_type_name", "metric_type", "metric_name"),
         {"postgresql_partition_by": "RANGE (partition_key)"},
     )
 
@@ -89,12 +91,6 @@ class Metric(Base):
     value: Mapped[float] = mapped_column(Float, nullable=False)
     extra_data: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     partition_key: Mapped[str] = mapped_column(String, primary_key=True)
-
-    __table_args__ = (
-        Index("ix_metrics_timestamp", "timestamp"),
-        Index("ix_metrics_type_name", "metric_type", "metric_name"),
-        {"postgresql_partition_by": "RANGE (partition_key)"},
-    )
 
 
 class CommunicationLog(Base):

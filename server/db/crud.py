@@ -184,19 +184,6 @@ async def create_subscription_aggregate(
 async def get_latency_distribution(session: AsyncSession, days: int = 7) -> dict[str, float]:
     """Compute P50/P95/P99 from communication_logs latency_ms."""
     cutoff = datetime.utcnow() - timedelta(days=days)
-    for percentile, label in [(0.5, "p50_ms"), (0.95, "p95_ms"), (0.99, "p99_ms")]:
-        # PostgreSQL percentile_cont
-        result = await session.execute(
-            select(
-                func.percentile_cont(percentile).within_group(
-                    CommunicationLog.latency_ms
-                )
-            ).where(CommunicationLog.timestamp >= cutoff)
-        )
-        val = result.scalar()
-        if val is None:
-            return {"p50_ms": 0.0, "p95_ms": 0.0, "p99_ms": 0.0}
-    # Re-run all three in one query for efficiency
     result = await session.execute(
         select(
             func.percentile_cont(0.5).within_group(CommunicationLog.latency_ms),
@@ -205,6 +192,8 @@ async def get_latency_distribution(session: AsyncSession, days: int = 7) -> dict
         ).where(CommunicationLog.timestamp >= cutoff)
     )
     row = result.one()
+    if row[0] is None:
+        return {"p50_ms": 0.0, "p95_ms": 0.0, "p99_ms": 0.0}
     return {"p50_ms": round(row[0] or 0.0, 2), "p95_ms": round(row[1] or 0.0, 2), "p99_ms": round(row[2] or 0.0, 2)}
 
 
