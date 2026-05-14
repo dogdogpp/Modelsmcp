@@ -9,6 +9,8 @@ from typing import Any
 
 import httpx
 
+import communication_settings as comm_settings
+
 
 @dataclass
 class WebhookMetrics:
@@ -107,9 +109,18 @@ class WebhookQueue:
         class_name: str,
         payload: dict[str, Any],
         confidence: float | None = None,
+        switch_key: str = "webhook_send",
     ) -> bool:
         if not self.webhook_url:
             return False
+
+        if not comm_settings.is_enabled(switch_key):
+            return False
+
+        # Embed switch_key into payload so _process_pending can enforce it
+        # even if the switch was toggled after enqueue.
+        payload = dict(payload)
+        payload["_switch_key"] = switch_key
 
         conf_bucket = f"{round(confidence, 1)}" if confidence is not None else "any"
         dedup_key = f"{camera_id}:{class_name}:{conf_bucket}"
@@ -172,6 +183,15 @@ class WebhookQueue:
             if self._stop_event.is_set():
                 break
             payload = json.loads(payload_json)
+            switch_key = payload.pop("_switch_key", "webhook_send")
+
+            if not comm_settings.is_enabled(switch_key):
+                # Drop the event if its switch is now disabled
+                with sqlite3.connect(self.db_path) as conn:
+                    conn.execute("DELETE FROM webhook_queue WHERE id = ?", (row_id,))
+                    conn.commit()
+                continue
+
             success = self._attempt_delivery(payload)
             self.metrics.inc_delivery()
 
@@ -202,14 +222,16 @@ class WebhookQueue:
                 else:
                     backoff = self.backoff_base_seconds * (2 ** retry_count)
                     next_retry = now + backoff
+                    # Restore _switch_key for next retry attempt
+                    payload["_switch_key"] = switch_key
                     with sqlite3.connect(self.db_path) as conn:
                         conn.execute(
                             """
                             UPDATE webhook_queue
-                            SET retry_count = ?, next_retry_at = ?, status = 'pending'
+                            SET retry_count = ?, next_retry_at = ?, status = 'pending', payload = ?
                             WHERE id = ?
                             """,
-                            (new_retry, next_retry, row_id),
+                            (new_retry, next_retry, json.dumps(payload), row_id),
                         )
                         conn.commit()
 

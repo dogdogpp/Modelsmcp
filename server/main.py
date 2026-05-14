@@ -338,6 +338,8 @@ async def sse_call(request: SseCallRequest, raw_request: Request):
     ``result`` or ``error`` event. Heartbeats are sent every 15 s to keep
     the connection alive for long-running operations.
     """
+    if not comm_settings.is_enabled("sse_send"):
+        raise HTTPException(status_code=503, detail="sse_send disabled")
     queue: asyncio.Queue[str | None] = asyncio.Queue()
 
     async def producer():
@@ -534,6 +536,9 @@ async def mcp_sse_endpoint(raw_request: Request):
     3. Client POSTs JSON-RPC messages to that URL
     4. Server may push responses back through this SSE connection
     """
+    if not comm_settings.is_enabled("sse_receive"):
+        raise HTTPException(status_code=503, detail="sse_receive disabled")
+
     session_id = str(uuid.uuid4())
     queue: asyncio.Queue[str | None] = asyncio.Queue()
     _mcp_sessions[session_id] = queue
@@ -730,6 +735,10 @@ async def camera_websocket(
     confidence: float = Query(0.5),
     classes: list[str] = Query([]),
 ):
+    if not comm_settings.is_enabled("websocket_bidirectional"):
+        await websocket.close(code=4003, reason="websocket_bidirectional disabled")
+        return
+
     # Security: Verify API Key (timing-safe) before accepting WebSocket connection.
     api_key = websocket.query_params.get("api_key") or websocket.headers.get("x-api-key")
     if API_KEY:
