@@ -1,0 +1,41 @@
+server:
+  host: "0.0.0.0"
+  port: 8081
+  workers: 4
+
+inference:
+  device: "cuda"
+  precision: "fp16"
+  batch_size: 1
+  timeout: 30s
+
+models:
+  yolo26:
+    enabled: true
+    variant: "yolo26m"
+    weights: "auto"
+  paddleocr:
+    enabled: true
+    lang: ["ch", "en"]
+  sam2:
+    enabled: true
+    variant: "sam2_hiera_large"
+  whisper:
+    enabled: true
+    model: "large-v3"
+
+security:
+  cors_origins: ["*"]
+  api_key: null
+
+webhooks:
+  openclaw:
+    url: "http://localhost:18789/hooks/deepmcp"
+    events:
+      - inference.complete
+      - inference.failed
+      - model.loaded
+    headers:
+      Authorization: "Bearer deepmcp-test-token-2026"
+    retry: 3
+    timeout: 10s

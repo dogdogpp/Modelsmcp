@@ -18,7 +18,7 @@ const navItems = [
   { to: "/playground", label: "Playground" },
   { to: "/docs", label: "文档" },
   { to: "/status", label: "状态" },
-  { to: "/subscriptions", label: "订阅通信" },
+  { to: "/subscriptions", label: "订阅" },
   { to: "/settings/communication", label: "通信设置" },
 ];
 

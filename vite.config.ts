@@ -26,6 +26,9 @@ export default defineConfig({
       '/tools': 'http://localhost:8081',
       '/health': 'http://localhost:8081',
       '/metrics': 'http://localhost:8081',
+      '/incidents': 'http://localhost:8081',
+      '/models/status': 'http://localhost:8081',
+      '/subscriptions': 'http://localhost:8081',
     },
   },
 })

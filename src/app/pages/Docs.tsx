@@ -649,6 +649,15 @@ openclaw gateway`} />
                     <div className="p-3 rounded-lg border border-white/5 bg-white/[0.02]">
                       <p className="text-cyan-300 text-xs font-medium mb-1">第 2 步：专家收到任务</p>
                       <p className="text-gray-400 text-xs">OpenClaw 自动调用 DeepMCP 的 <code className="text-cyan-300">yolo26_detect</code> 工具，把照片传过去。</p>
+                      <div className="mt-2 p-2 rounded border border-amber-500/10 bg-amber-500/5 text-amber-300 text-xs">
+                        图片支持多种格式：URL（<code className="text-cyan-300">http://...</code>）、Base64（<code className="text-cyan-300">base64://...</code> 或 <code className="text-cyan-300">data:image/...;base64,...</code>）、本地文件（<code className="text-cyan-300">file:///...</code>）、OpenClaw 媒体引用（<code className="text-cyan-300">media://inbound/&lt;id&gt;</code>）。
+                        <br/><br/>
+                        <strong>聊天附件图片说明</strong>：
+                        <ul className="list-disc list-inside mt-1 space-y-0.5">
+                          <li><strong>大图片（&gt;2MB）</strong>：OpenClaw 会自动保存为 media 文件，prompt 中会出现 <code className="text-cyan-300">[media attached: media://inbound/&lt;id&gt;]</code>，模型可能自动将该 URI 传入工具参数，DeepMCP 已支持解析。</li>
+                          <li><strong>小图片（&lt;2MB）</strong>：作为 inline image 传给模型，没有可引用 URI。当前建议改用<strong>图片 URL</strong> 或 <strong>POST /upload</strong> 端点上传后调用。</li>
+                        </ul>
+                      </div>
                     </div>
 
                     <div className="p-3 rounded-lg border border-white/5 bg-white/[0.02]">
@@ -735,6 +744,17 @@ openclaw gateway`} />
                     <div className="p-3 rounded-lg border border-white/5 bg-white/[0.02]">
                       <p className="text-white text-xs font-medium">Q: OpenClaw 说"找不到工具"或报 404？</p>
                       <p className="text-gray-400 text-xs mt-1">A: DeepMCP 的 SSE 端点是 <code className="text-cyan-300">/sse</code>，不是 <code className="text-cyan-300">/mcp</code>。请把配置里的 url 改成 <code className="text-cyan-300">http://localhost:8081/sse</code>，然后确认 DeepMCP 正在运行，且 <code className="text-cyan-300">tools</code> 白名单里列出了你想用的工具名。</p>
+                    </div>
+                    <div className="p-3 rounded-lg border border-white/5 bg-white/[0.02]">
+                      <p className="text-white text-xs font-medium">Q: OpenClaw / 飞书聊天里发的图片，DeepMCP 能用吗？</p>
+                      <div className="text-gray-400 text-xs mt-1 space-y-1">
+                        <p>A: DeepMCP 支持多种图片输入方式：URL（<code className="text-cyan-300">http://...</code>）、Base64（<code className="text-cyan-300">base64://...</code> 或 <code className="text-cyan-300">data:image/...;base64,...</code>）、本地路径（<code className="text-cyan-300">file:///path/to/img.jpg</code>）、OpenClaw 媒体引用（<code className="text-cyan-300">media://inbound/&lt;id&gt;</code>）。</p>
+                        <p><strong>聊天附件图片分两种情况：</strong></p>
+                        <ul className="list-disc list-inside space-y-0.5">
+                          <li><strong>大图片（&gt;2MB）</strong>：OpenClaw 会自动 offload 到 media store，prompt 中出现 <code className="text-cyan-300">[media attached: media://inbound/&lt;id&gt;]</code>。DeepMCP 已支持解析该 URI，模型可能自动将其传入工具参数。这是不修改 OpenClaw 源码前提下，聊天发图最可行的方案。</li>
+                          <li><strong>小图片（&lt;2MB）</strong>：作为 inline image block 传给模型，没有可引用的 URI。LLM 无法自动将其编码为 base64 传入工具参数。当前 workaround：使用<strong>图片 URL</strong> 或 <strong>POST /upload</strong> 端点直接上传。</li>
+                        </ul>
+                      </div>
                     </div>
                     <div className="p-3 rounded-lg border border-white/5 bg-white/[0.02]">
                       <p className="text-white text-xs font-medium">Q: DeepMCP 推送了，但 OpenClaw 没反应？</p>
