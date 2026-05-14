@@ -735,16 +735,18 @@ async def camera_websocket(
     confidence: float = Query(0.5),
     classes: list[str] = Query([]),
 ):
-    if not comm_settings.is_enabled("websocket_bidirectional"):
-        await websocket.close(code=4003, reason="websocket_bidirectional disabled")
-        return
-
     # Security: Verify API Key (timing-safe) before accepting WebSocket connection.
     api_key = websocket.query_params.get("api_key") or websocket.headers.get("x-api-key")
     if API_KEY:
         if not api_key or not hmac.compare_digest(api_key, API_KEY):
             await websocket.close(code=4001, reason="Invalid or missing API Key")
             return
+
+    await websocket.accept()
+
+    if not comm_settings.is_enabled("websocket_bidirectional"):
+        await websocket.close(code=4003, reason="websocket_bidirectional disabled")
+        return
 
     cm = _get_camera_manager()
     stream = cm.get_stream(camera_id)
