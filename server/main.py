@@ -47,6 +47,7 @@ from mcp.protocol import (
     CommunicationLog as CommunicationLogSchema,
     SubscriptionsMetrics, LatencyDistribution, ModeRatio, ThroughputHistoryPoint,
     MetricsDataPoint,
+    HealthResponse, HealthModelInfo,
 )
 from camera import CameraManager
 from webhook import WebhookQueue
