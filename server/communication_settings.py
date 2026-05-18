@@ -13,7 +13,6 @@ from config import BASE_DIR
 
 SettingsKey = Literal[
     "websocket_bidirectional",
-    "redis_subscription",
     "sse_receive",
     "webhook_send",
     "sse_send",
@@ -22,7 +21,6 @@ SettingsKey = Literal[
 
 DEFAULT_SETTINGS: dict[SettingsKey, bool] = {
     "websocket_bidirectional": True,
-    "redis_subscription": True,
     "sse_receive": True,
     "webhook_send": True,
     "sse_send": True,
@@ -99,7 +97,6 @@ def set_switch(key: str, value: bool, actor: str = "当前用户") -> dict:
 def _switch_title(key: str) -> str:
     titles = {
         "websocket_bidirectional": "WebSocket 全双工",
-        "redis_subscription": "Redis 消息代理订阅",
         "sse_receive": "SSE 流式推送接收",
         "webhook_send": "Webhook 回调发送",
         "sse_send": "SSE 流式推送发送",
