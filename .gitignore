@@ -31,3 +31,4 @@ nohup.out
 # OS
 .DS_Store
 Thumbs.db
+server/communication_settings.json
