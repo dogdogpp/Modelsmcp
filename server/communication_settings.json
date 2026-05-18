@@ -1,0 +1,108 @@
+{
+  "switches": {
+    "websocket_bidirectional": true,
+    "redis_subscription": true,
+    "sse_receive": true,
+    "webhook_send": true,
+    "sse_send": true,
+    "feishu_push": true
+  },
+  "logs": [
+    {
+      "id": "1778663939217-c0f8",
+      "timestamp": 1778663939217,
+      "switchId": "websocket_bidirectional",
+      "switchTitle": "WebSocket 全双工",
+      "newState": false,
+      "actor": "当前用户"
+    },
+    {
+      "id": "1778664102322-a96c",
+      "timestamp": 1778664102322,
+      "switchId": "websocket_bidirectional",
+      "switchTitle": "WebSocket 全双工",
+      "newState": true,
+      "actor": "当前用户"
+    },
+    {
+      "id": "1778664113669-fba8",
+      "timestamp": 1778664113669,
+      "switchId": "sse_receive",
+      "switchTitle": "SSE 流式推送接收",
+      "newState": false,
+      "actor": "当前用户"
+    },
+    {
+      "id": "1778664121364-2cff",
+      "timestamp": 1778664121364,
+      "switchId": "sse_send",
+      "switchTitle": "SSE 流式推送发送",
+      "newState": false,
+      "actor": "当前用户"
+    },
+    {
+      "id": "1778664207987-4520",
+      "timestamp": 1778664207988,
+      "switchId": "webhook_send",
+      "switchTitle": "Webhook 回调发送",
+      "newState": false,
+      "actor": "当前用户"
+    },
+    {
+      "id": "1778664248997-ecb7",
+      "timestamp": 1778664248997,
+      "switchId": "feishu_push",
+      "switchTitle": "飞书 / OpenClaw 消息推送",
+      "newState": false,
+      "actor": "当前用户"
+    },
+    {
+      "id": "1778664344840-06fa",
+      "timestamp": 1778664344840,
+      "switchId": "sse_receive",
+      "switchTitle": "SSE 流式推送接收",
+      "newState": true,
+      "actor": "当前用户"
+    },
+    {
+      "id": "1778664344848-36a9",
+      "timestamp": 1778664344848,
+      "switchId": "sse_send",
+      "switchTitle": "SSE 流式推送发送",
+      "newState": true,
+      "actor": "当前用户"
+    },
+    {
+      "id": "1778664344855-4520",
+      "timestamp": 1778664344855,
+      "switchId": "webhook_send",
+      "switchTitle": "Webhook 回调发送",
+      "newState": true,
+      "actor": "当前用户"
+    },
+    {
+      "id": "1778664344862-ecb7",
+      "timestamp": 1778664344862,
+      "switchId": "feishu_push",
+      "switchTitle": "飞书 / OpenClaw 消息推送",
+      "newState": true,
+      "actor": "当前用户"
+    },
+    {
+      "id": "1779096651854-7877",
+      "timestamp": 1779096651854,
+      "switchId": "websocket_bidirectional",
+      "switchTitle": "WebSocket 全双工",
+      "newState": false,
+      "actor": "当前用户"
+    },
+    {
+      "id": "1779096707221-7877",
+      "timestamp": 1779096707221,
+      "switchId": "websocket_bidirectional",
+      "switchTitle": "WebSocket 全双工",
+      "newState": true,
+      "actor": "当前用户"
+    }
+  ]
+}

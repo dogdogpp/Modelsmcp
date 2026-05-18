@@ -6,7 +6,6 @@ import {
   ArrowLeftRight,
   ArrowRight,
   Radio,
-  Database,
   Webhook,
   Zap,
   MessageSquare,
@@ -51,12 +50,6 @@ const bidirectionalSwitches: CommSwitchDef[] = [
       "启用 DeepMCP 与 OpenClaw 之间的实时全双工 WebSocket 通信通道",
     icon: <Radio size={18} />,
     critical: true,
-  },
-  {
-    key: "redis_subscription",
-    title: "Redis 消息代理订阅",
-    description: "通过 Redis 消息代理接收异步事件与指令广播",
-    icon: <Database size={18} />,
   },
   {
     key: "sse_receive",

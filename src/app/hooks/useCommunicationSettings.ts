@@ -3,7 +3,6 @@ import { toast } from "sonner";
 
 export type SwitchKey =
   | "websocket_bidirectional"
-  | "redis_subscription"
   | "sse_receive"
   | "webhook_send"
   | "sse_send"
@@ -48,7 +47,6 @@ function trackEvent(
 export function useCommunicationSettings() {
   const [states, setStates] = useState<Record<SwitchKey, boolean>>({
     websocket_bidirectional: true,
-    redis_subscription: true,
     sse_receive: true,
     webhook_send: true,
     sse_send: true,
