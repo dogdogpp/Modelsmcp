@@ -40,7 +40,7 @@ from config import (
 )
 from mcp.server import init_tools, get_tools, call_tool, call_tool_stream, get_metrics
 from mcp.protocol import (
-    CallRequest, SseCallRequest, format_sse,
+    CallRequest, CallResponse, SseCallRequest, format_sse,
     Incident as IncidentSchema,
     ModelStatusResponse, ModelPerformance,
     Subscription as SubscriptionSchema,
@@ -56,6 +56,7 @@ import communication_settings as comm_settings
 
 # Database imports
 from db import init_db, engine, get_db, ensure_partitions
+from db.models import CommunicationLog
 from db.crud import (
     get_incidents,
     get_metrics_history,
@@ -67,6 +68,9 @@ from db.crud import (
     get_mode_ratios,
     create_metrics_batch,
     create_subscription_aggregate,
+    get_model_meta_by_mcp_tool,
+    create_communication_log,
+    upsert_subscription_stats,
 )
 
 # APScheduler
@@ -97,6 +101,91 @@ async def verify_api_key(api_key: str = Security(api_key_header)):
     if not hmac.compare_digest(api_key, API_KEY):
         raise HTTPException(status_code=403, detail="Invalid API Key")
     return api_key
+
+
+# ---------------------------------------------------------------------------
+# Inference recording helper
+# ---------------------------------------------------------------------------
+
+async def _record_inference(
+    session: AsyncSession,
+    tool_name: str,
+    response: CallResponse,
+    mode: str,
+    payload_size_bytes: int = 0,
+) -> None:
+    """Write a communication log and update subscription stats atomically.
+
+    Failures are silently logged and must NOT block the inference response.
+    """
+    try:
+        model = await get_model_meta_by_mcp_tool(session, tool_name)
+        if model is None:
+            return
+
+        latency_str = response.inference_time.replace("ms", "").strip()
+        try:
+            latency_ms = float(latency_str)
+        except ValueError:
+            latency_ms = 0.0
+
+        now = datetime.utcnow()
+        partition_key = now.strftime("%Y-%m-%d")
+        success = response.status == "success"
+
+        summary = "Inference completed"
+        if isinstance(response.result, dict):
+            if "detections" in response.result:
+                summary = f"Detect {len(response.result['detections'])} objects"
+            elif "texts" in response.result:
+                summary = f"Recognize {len(response.result['texts'])} texts"
+            elif "masks" in response.result:
+                summary = f"Segment {len(response.result['masks'])} masks"
+            elif "segments" in response.result:
+                summary = f"Transcribe {len(response.result['segments'])} segments"
+            elif "persons" in response.result:
+                summary = f"Detect {len(response.result['persons'])} persons"
+            elif "available_cameras" in response.result:
+                summary = f"List {len(response.result['available_cameras'])} cameras"
+            elif "image_base64" in response.result:
+                summary = "Return camera frame"
+            elif "detected" in response.result:
+                summary = "Return last detection"
+            elif "results" in response.result:
+                summary = f"Encode {len(response.result['results'])} results"
+            elif "embedding" in response.result:
+                summary = "Extract visual features"
+            elif "depth_map" in response.result:
+                summary = "Estimate depth map"
+
+        log = CommunicationLog(
+            id=str(uuid.uuid4()),
+            timestamp=now,
+            model_id=model.id,
+            model_name=model.name,
+            direction="inbound",
+            log_type="inference",
+            mode=mode,
+            status="success" if success else "error",
+            latency_ms=round(latency_ms, 2),
+            payload_size_bytes=payload_size_bytes,
+            summary=summary,
+            partition_key=partition_key,
+        )
+        session.add(log)
+
+        await upsert_subscription_stats(
+            session,
+            model_id=model.id,
+            model_name=model.name,
+            latency_ms=latency_ms,
+            success=success,
+        )
+
+        await session.commit()
+        await session.refresh(log)
+    except Exception as exc:
+        print(f"[DeepMCP] Failed to record inference: {exc}")
 
 
 # ---------------------------------------------------------------------------
@@ -323,15 +412,17 @@ def tools():
 
 
 @app.post("/call", dependencies=[Depends(verify_api_key)])
-def call(request: CallRequest):
+async def call(request: CallRequest, session: AsyncSession = Depends(get_db)):
     response = call_tool(request)
     if response.status == "error":
         raise HTTPException(status_code=400, detail=response.error)
+    payload_size = len(json.dumps(request.arguments or {}).encode("utf-8"))
+    await _record_inference(session, request.tool, response, mode="HTTP", payload_size_bytes=payload_size)
     return response
 
 
 @app.post("/sse", dependencies=[Depends(verify_api_key)])
-async def sse_call(request: SseCallRequest, raw_request: Request):
+async def sse_call(request: SseCallRequest, raw_request: Request, session: AsyncSession = Depends(get_db)):
     """Stream tool execution results via Server-Sent Events.
 
     Emits ``progress`` events during inference, followed by either a
@@ -343,17 +434,43 @@ async def sse_call(request: SseCallRequest, raw_request: Request):
     queue: asyncio.Queue[str | None] = asyncio.Queue()
 
     async def producer():
+        response: CallResponse | None = None
         try:
             async for event_dict in call_tool_stream(
                 CallRequest(tool=request.tool, arguments=request.arguments)
             ):
                 await queue.put(format_sse(event_dict["event"], event_dict["data"]))
-                if event_dict["event"] in ("result", "error"):
+                if event_dict["event"] == "result":
+                    response = CallResponse(**event_dict["data"])
+                    break
+                elif event_dict["event"] == "error":
+                    response = CallResponse(
+                        status="error",
+                        model=request.tool,
+                        inference_time="0ms",
+                        device="cpu",
+                        result=None,
+                        error=event_dict["data"],
+                    )
                     break
         except Exception as e:
             await queue.put(format_sse("error", {"code": "STREAM_ERROR", "message": str(e)}))
+            response = CallResponse(
+                status="error",
+                model=request.tool,
+                inference_time="0ms",
+                device="cpu",
+                result=None,
+                error={"code": "STREAM_ERROR", "message": str(e)},
+            )
         finally:
             await queue.put(None)  # sentinel to signal completion
+            if response is not None:
+                payload_size = len(json.dumps(request.arguments or {}).encode("utf-8"))
+                try:
+                    await _record_inference(session, request.tool, response, mode="SSE", payload_size_bytes=payload_size)
+                except Exception:
+                    pass
 
     async def heartbeat():
         try:
@@ -408,6 +525,7 @@ async def upload(
     tool: str = Form(...),
     file: UploadFile = File(...),
     arguments: str = Form("{}"),
+    session: AsyncSession = Depends(get_db),
 ):
     """Upload a file and run inference. The file is converted to base64 and passed
 to the specified tool as the 'image' or 'audio' argument."""
@@ -444,6 +562,7 @@ to the specified tool as the 'image' or 'audio' argument."""
     response = call_tool(request)
     if response.status == "error":
         raise HTTPException(status_code=400, detail=response.error)
+    await _record_inference(session, tool, response, mode="HTTP", payload_size_bytes=len(contents))
     return response
 
 
@@ -575,7 +694,7 @@ async def mcp_sse_endpoint(raw_request: Request):
 
 
 @app.post("/messages", dependencies=[Depends(verify_api_key)])
-async def mcp_messages(session_id: str = Query(...), raw_request: Request = None):
+async def mcp_messages(session_id: str = Query(...), raw_request: Request = None, session: AsyncSession = Depends(get_db)):
     """Receive JSON-RPC messages for MCP SSE transport."""
     body = await raw_request.json()
 
@@ -607,6 +726,11 @@ async def mcp_messages(session_id: str = Query(...), raw_request: Request = None
         tool_name = params.get("name", "")
         arguments = params.get("arguments", {})
         response = call_tool(CallRequest(tool=tool_name, arguments=arguments))
+        payload_size = len(json.dumps(arguments or {}).encode("utf-8"))
+        try:
+            await _record_inference(session, tool_name, response, mode="SSE", payload_size_bytes=payload_size)
+        except Exception:
+            pass
         result = {
             "jsonrpc": "2.0",
             "id": req_id,

@@ -97,6 +97,15 @@ async def update_model_performance(
 
 
 # ---------------------------------------------------------------------------
+# Model lookup by MCP tool name
+# ---------------------------------------------------------------------------
+
+async def get_model_meta_by_mcp_tool(session: AsyncSession, mcp_tool: str) -> ModelMeta | None:
+    result = await session.execute(select(ModelMeta).where(ModelMeta.mcp_tool == mcp_tool))
+    return result.scalar_one_or_none()
+
+
+# ---------------------------------------------------------------------------
 # Communication logs
 # ---------------------------------------------------------------------------
 
@@ -137,6 +146,44 @@ async def create_subscription(session: AsyncSession, **kwargs: Any) -> Subscript
     session.add(sub)
     await session.commit()
     await session.refresh(sub)
+    return sub
+
+
+async def upsert_subscription_stats(
+    session: AsyncSession,
+    model_id: str,
+    model_name: str,
+    latency_ms: float,
+    success: bool,
+) -> Subscription:
+    """Update subscription stats or create a new one. Does NOT commit."""
+    result = await session.execute(select(Subscription).where(Subscription.model_id == model_id))
+    sub: Subscription | None = result.scalar_one_or_none()
+    now = datetime.utcnow()
+    if sub is None:
+        sub = Subscription(
+            id=f"sub-{model_id}",
+            model_id=model_id,
+            model_name=model_name,
+            status="active",
+            subscribed_at=now,
+            last_active_at=now,
+            total_calls=1,
+            success_rate=1.0 if success else 0.0,
+            avg_latency_ms=round(latency_ms, 2),
+        )
+        session.add(sub)
+    else:
+        sub.total_calls += 1
+        # Cumulative moving average for success_rate and avg_latency_ms
+        prev_calls = sub.total_calls - 1
+        sub.success_rate = round(
+            (sub.success_rate * prev_calls + (1.0 if success else 0.0)) / sub.total_calls, 4
+        )
+        sub.avg_latency_ms = round(
+            (sub.avg_latency_ms * prev_calls + latency_ms) / sub.total_calls, 2
+        )
+        sub.last_active_at = now
     return sub
 
 
