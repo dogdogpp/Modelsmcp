@@ -254,29 +254,66 @@ class TestEndpointRecording:
 
     def test_call_and_messages_endpoints_record_inference(self):
         import main
-        with patch.object(main, "_record_inference", new_callable=AsyncMock) as mock_record:
-            with patch.object(main, "get_db") as mock_get_db:
-                mock_session = _make_mock_session()
-                mock_get_db.return_value = mock_session
+        with patch.object(main, "init_db", new_callable=AsyncMock):
+            with patch.object(main, "_record_inference", new_callable=AsyncMock) as mock_record:
+                with patch.object(main, "get_db") as mock_get_db:
+                    mock_session = _make_mock_session()
+                    mock_get_db.return_value = mock_session
 
-                with TestClient(main.app) as client:
-                    res_call = client.post("/call", json={"tool": "yolo26_detect", "arguments": {"image": "test"}})
-                    assert res_call.status_code == 200
+                    with TestClient(main.app) as client:
+                        res_call = client.post("/call", json={"tool": "yolo26_detect", "arguments": {"image": "test"}})
+                        assert res_call.status_code == 200
 
-                    res_msg = client.post(
-                        "/messages?session_id=test-123",
-                        json={
-                            "jsonrpc": "2.0",
-                            "id": 1,
-                            "method": "tools/call",
-                            "params": {"name": "yolo26_detect", "arguments": {"image": "test"}},
-                        },
-                    )
-                    assert res_msg.status_code == 200
+                        res_msg = client.post(
+                            "/messages?session_id=test-123",
+                            json={
+                                "jsonrpc": "2.0",
+                                "id": 1,
+                                "method": "tools/call",
+                                "params": {"name": "yolo26_detect", "arguments": {"image": "test"}},
+                            },
+                        )
+                        assert res_msg.status_code == 200
 
-                assert mock_record.await_count == 2
-                call_args = mock_record.call_args_list
-                assert call_args[0][0][1] == "yolo26_detect"
-                assert call_args[0][1]["mode"] == "HTTP"
-                assert call_args[1][0][1] == "yolo26_detect"
-                assert call_args[1][1]["mode"] == "SSE"
+                    assert mock_record.await_count == 2
+                    call_args = mock_record.call_args_list
+                    assert call_args[0][0][1] == "yolo26_detect"
+                    assert call_args[0][1]["mode"] == "HTTP"
+                    assert call_args[1][0][1] == "yolo26_detect"
+                    assert call_args[1][1]["mode"] == "SSE"
+
+    def test_call_endpoint_records_error_before_raising(self):
+        import main
+        with patch.object(main, "init_db", new_callable=AsyncMock):
+            with patch.object(main, "_record_inference", new_callable=AsyncMock) as mock_record:
+                with patch.object(main, "get_db") as mock_get_db:
+                    mock_session = _make_mock_session()
+                    mock_get_db.return_value = mock_session
+
+                    with TestClient(main.app) as client:
+                        res = client.post("/call", json={"tool": "unknown_tool", "arguments": {}})
+                        assert res.status_code == 400
+
+                    mock_record.assert_awaited_once()
+                    recorded_response = mock_record.call_args[0][2]
+                    assert recorded_response.status == "error"
+
+    def test_upload_endpoint_records_error_before_raising(self):
+        import main
+        with patch.object(main, "init_db", new_callable=AsyncMock):
+            with patch.object(main, "_record_inference", new_callable=AsyncMock) as mock_record:
+                with patch.object(main, "get_db") as mock_get_db:
+                    mock_session = _make_mock_session()
+                    mock_get_db.return_value = mock_session
+
+                    with TestClient(main.app) as client:
+                        res = client.post(
+                            "/upload",
+                            data={"tool": "unknown_tool", "arguments": "{}"},
+                            files={"file": ("test.jpg", b"fake-image-data", "image/jpeg")},
+                        )
+                        assert res.status_code == 400
+
+                    mock_record.assert_awaited_once()
+                    recorded_response = mock_record.call_args[0][2]
+                    assert recorded_response.status == "error"

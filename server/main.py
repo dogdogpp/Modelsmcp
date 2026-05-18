@@ -297,13 +297,30 @@ async def _collect_metrics_job():
             data={m["mode"]: {"count": m["count"], "percentage": m["percentage"]} for m in mode_ratios},
         )
 
-        # Throughput aggregate
+        # Throughput aggregate — based on real communication_logs count
+        from sqlalchemy import func as sa_func
+        tput_cutoff = now - timedelta(seconds=METRICS_COLLECTION_INTERVAL)
+        inbound_result = await session.execute(
+            select(sa_func.count())
+            .where(CommunicationLog.timestamp >= tput_cutoff)
+            .where(CommunicationLog.direction == "inbound")
+        )
+        inbound_count = inbound_result.scalar() or 0
+        outbound_result = await session.execute(
+            select(sa_func.count())
+            .where(CommunicationLog.timestamp >= tput_cutoff)
+            .where(CommunicationLog.direction == "outbound")
+        )
+        outbound_count = outbound_result.scalar() or 0
+        interval_sec = max(METRICS_COLLECTION_INTERVAL, 1.0)
         await create_subscription_aggregate(
             session,
             timestamp=now,
             metric_type="throughput",
-            data={"inbound": round(40 + random.uniform(-10, 10), 1),
-                  "outbound": round(20 + random.uniform(-5, 5), 1)},
+            data={
+                "inbound": round(inbound_count / interval_sec, 1),
+                "outbound": round(outbound_count / interval_sec, 1),
+            },
         )
 
         # 4. Ensure partitions exist and cleanup old ones
@@ -414,10 +431,10 @@ def tools():
 @app.post("/call", dependencies=[Depends(verify_api_key)])
 async def call(request: CallRequest, session: AsyncSession = Depends(get_db)):
     response = call_tool(request)
-    if response.status == "error":
-        raise HTTPException(status_code=400, detail=response.error)
     payload_size = len(json.dumps(request.arguments or {}).encode("utf-8"))
     await _record_inference(session, request.tool, response, mode="HTTP", payload_size_bytes=payload_size)
+    if response.status == "error":
+        raise HTTPException(status_code=400, detail=response.error)
     return response
 
 
@@ -467,10 +484,7 @@ async def sse_call(request: SseCallRequest, raw_request: Request, session: Async
             await queue.put(None)  # sentinel to signal completion
             if response is not None:
                 payload_size = len(json.dumps(request.arguments or {}).encode("utf-8"))
-                try:
-                    await _record_inference(session, request.tool, response, mode="SSE", payload_size_bytes=payload_size)
-                except Exception:
-                    pass
+                await _record_inference(session, request.tool, response, mode="SSE", payload_size_bytes=payload_size)
 
     async def heartbeat():
         try:
@@ -560,9 +574,9 @@ to the specified tool as the 'image' or 'audio' argument."""
 
     request = CallRequest(tool=tool, arguments=args)
     response = call_tool(request)
+    await _record_inference(session, tool, response, mode="HTTP", payload_size_bytes=len(contents))
     if response.status == "error":
         raise HTTPException(status_code=400, detail=response.error)
-    await _record_inference(session, tool, response, mode="HTTP", payload_size_bytes=len(contents))
     return response
 
 
