@@ -27,15 +27,7 @@ const sections = [
 
 const tools = [
   { name: "yolo26_detect", desc: "YOLO2026 目标检测", params: ["image", "confidence", "classes", "model_size"] },
-  { name: "detr_detect", desc: "DETR Transformer 检测", params: ["image", "threshold", "return_masks"] },
-  { name: "paddleocr_recognize", desc: "PaddleOCR 文字识别", params: ["image", "lang", "use_angle_cls", "det", "rec"] },
-  { name: "sam2_segment", desc: "SAM 2 图像/视频分割", params: ["image", "prompts", "multimask_output"] },
-  { name: "clip_encode", desc: "CLIP 图文编码", params: ["image", "texts", "mode"] },
   { name: "whisper_transcribe", desc: "Whisper 语音识别", params: ["audio", "language", "task", "word_timestamps"] },
-  { name: "depth_estimate", desc: "Depth Anything 深度估计", params: ["image", "model_size", "output_format"] },
-  { name: "dinov2_embed", desc: "DINOv2 视觉特征提取", params: ["image", "model", "return_patch_tokens"] },
-  { name: "pose_estimate", desc: "YOLOv8 人体姿态估计", params: ["image", "confidence", "visualize"] },
-  { name: "grounding_dino_detect", desc: "开放词汇目标检测", params: ["image", "text_prompt", "box_threshold"] },
 ];
 
 function CodeBlock({ code, lang = "bash", copyKey }: { code: string; lang?: string; copyKey: string }) {
@@ -134,17 +126,17 @@ export function Docs() {
             <section id="intro">
               <h2 className="text-white mb-4" style={{ fontSize: "1.5rem", fontWeight: 700 }}>简介</h2>
               <p className="text-gray-400 leading-relaxed mb-4">
-                DeepMCP 是一个开源的深度学习模型 MCP 服务平台，将主流视觉、语音、多模态模型封装为标准
+                DeepMCP 是一个开源的深度学习模型 MCP 服务平台，将主流视觉、语音模型封装为标准
                 Model Context Protocol (MCP) 工具，让 AI 应用可以直接调用本地推理能力。
               </p>
               <p className="text-gray-400 leading-relaxed mb-6">
                 通过 DeepMCP，您可以在保护数据隐私的前提下，让 Claude、OpenClaw 等 AI 助手具备：
-                目标检测、图像分割、文字识别、语音转录、深度估计等强大的视觉感知能力。
+                目标检测、语音转录等强大的感知能力。
               </p>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {[
                   { icon: <Zap size={16} className="text-cyan-400" />, title: "毫秒级推理", desc: "本地 GPU 推理，延迟最低 12ms" },
-                  { icon: <Package size={16} className="text-purple-400" />, title: "10+ 模型", desc: "覆盖主流 CV/NLP 任务" },
+                  { icon: <Package size={16} className="text-purple-400" />, title: "真实模型", desc: "当前已接入 YOLO2026 与 Whisper" },
                   { icon: <Server size={16} className="text-green-400" />, title: "标准 MCP", desc: "兼容所有 MCP 客户端" },
                 ].map((item) => (
                   <div key={item.title} className="p-4 rounded-xl border border-white/5 bg-white/[0.02]">
@@ -187,9 +179,9 @@ pipx install deepmcp`}
 deepmcp pull --all
 
 # 下载单个模型
-deepmcp pull yolo26 paddleocr
+deepmcp pull yolo26
 
-# 启动 MCP 服务（默认端口 8081）
+# 启动 MCP 服务（默认端口 8080）
 deepmcp serve --gpu
 
 # 指定 CPU 运行
@@ -205,10 +197,10 @@ deepmcp serve --device cpu`}
                     copyKey="verify"
                     lang="bash"
                     code={`# 查看可用工具列表
-curl http://localhost:8081/tools
+curl http://localhost:8080/tools
 
 # 测试推理
-curl -X POST http://localhost:8081/call \\
+curl -X POST http://localhost:8080/call \\
   -H "Content-Type: application/json" \\
   -d '{"tool": "yolo26_detect", "arguments": {"image": "https://example.com/img.jpg"}}'`}
                   />
@@ -318,7 +310,7 @@ Content-Type: application/json
                 code={`# deepmcp.config.yaml
 server:
   host: "0.0.0.0"
-  port: 8081
+  port: 8080
   workers: 4
 
 inference:
@@ -332,12 +324,6 @@ models:
     enabled: true
     variant: "yolo26m"    # n/s/m/l/x
     weights: "auto"       # auto download or local path
-  paddleocr:
-    enabled: true
-    lang: ["ch", "en"]
-  sam2:
-    enabled: true
-    variant: "sam2_hiera_large"
   whisper:
     enabled: true
     model: "large-v3"
@@ -364,9 +350,9 @@ security:
   "mcpServers": {
     "deepmcp": {
       "command": "deepmcp",
-      "args": ["serve", "--port", "8081", "--device", "cuda"],
+      "args": ["serve", "--port", "8080", "--device", "cuda"],
       "env": {
-        "DEEPMCP_MODELS": "yolo26,paddleocr,sam2,whisper"
+        "DEEPMCP_MODELS": "yolo26,whisper"
       }
     }
   }
@@ -387,391 +373,14 @@ security:
 mcp_servers:
   deepmcp:
     transport: "http"
-    # DeepMCP 的 SSE 端点是 /sse，不是 /mcp
-    url: "http://localhost:8081/sse"
+    url: "http://localhost:8080/mcp"
     tools:
       - yolo26_detect
-      - paddleocr_recognize
-      - sam2_segment
       - whisper_transcribe
     auth:
       type: none
     timeout: 60`}
               />
-            </section>
-
-            {/* OpenClaw 双向订阅通信（小白教程） */}
-            <section id="openclaw-bidirectional">
-              <h2 className="text-white mb-4" style={{ fontSize: "1.5rem", fontWeight: 700 }}>OpenClaw 双向订阅通信</h2>
-
-              <p className="text-gray-400 leading-relaxed mb-4">
-                这一节面向零基础用户，手把手教你怎么让 <strong>OpenClaw</strong>（你的 AI 助手）和 <strong>DeepMCP</strong>（你的视觉推理引擎）实现"双向聊天"。
-              </p>
-
-              <div className="p-4 rounded-xl border border-cyan-500/20 bg-cyan-500/5 mb-6">
-                <p className="text-cyan-300 text-sm font-medium mb-2">打个比方</p>
-                <p className="text-gray-400 text-sm leading-relaxed">
-                  想象 OpenClaw 是你的"老板"，DeepMCP 是你的"视觉专家"。
-                  <br/><br/>
-                  <strong>单向模式</strong>：老板把照片递给专家，专家看完直接在纸上写结果递回来。一锤子买卖，中间不能打断、不能追问。
-                  <br/><br/>
-                  <strong>双向模式</strong>：老板和专家加了个微信群。老板可以随时@专家发新照片；专家处理到一半还能在群里发"正在数人数，60%了…"；处理完自动发结果到群里。甚至专家发现摄像头新画面有异常，也能主动@老板报警。
-                  <br/><br/>
-                  这就是双向订阅——两个人都能主动说话，不是只能等对方先开口。
-                </p>
-              </div>
-
-              <div className="space-y-10">
-
-                {/* 第一步 */}
-                <div>
-                  <h3 className="text-white mb-3 flex items-center gap-2" style={{ fontWeight: 600 }}>
-                    <span className="w-6 h-6 rounded-full bg-cyan-500/20 text-cyan-400 text-xs flex items-center justify-center" style={{ fontWeight: 700 }}>1</span>
-                    前置准备：两个服务都要先跑起来
-                  </h3>
-                  <p className="text-gray-400 text-sm leading-relaxed mb-3">
-                    就像微信聊天前两人都要先安装微信。你需要同时启动 OpenClaw 和 DeepMCP。
-                  </p>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div className="p-4 rounded-xl border border-white/5 bg-white/[0.02]">
-                      <div className="text-white text-sm font-medium mb-2">启动 DeepMCP（视觉专家）</div>
-                      <div className="text-gray-500 text-xs mb-2">默认监听 http://localhost:8081</div>
-                      <CodeBlock copyKey="step1-deepmcp" lang="bash" code={`# 启动服务
-deepmcp serve --port 8081
-
-# 看到类似输出就说明成功了
-# INFO  DeepMCP ready at http://0.0.0.0:8081
-# INFO  Loaded tools: yolo26_detect, paddleocr_recognize, sam2_segment`} />
-                    </div>
-                    <div className="p-4 rounded-xl border border-white/5 bg-white/[0.02]">
-                      <div className="text-white text-sm font-medium mb-2">启动 OpenClaw（AI 老板）</div>
-                      <div className="text-gray-500 text-xs mb-2">默认监听 http://localhost:18789</div>
-                      <CodeBlock copyKey="step1-openclaw" lang="bash" code={`# 启动网关
-openclaw gateway
-
-# 看到类似输出就说明成功了
-# INFO  Gateway listening on ws://0.0.0.0:18789
-# INFO  Control UI: http://127.0.0.1:18789`} />
-                    </div>
-                  </div>
-
-                  <div className="p-3 rounded-lg border border-amber-500/20 bg-amber-500/5 text-amber-300 text-xs">
-                    验证两个小窗口都开着，别关掉。记住两个地址：DeepMCP 是 <code className="text-cyan-300">8081</code> 端口，OpenClaw 是 <code className="text-cyan-300">18789</code> 端口。
-                  </div>
-                </div>
-
-                {/* 第二步 */}
-                <div>
-                  <h3 className="text-white mb-3 flex items-center gap-2" style={{ fontWeight: 600 }}>
-                    <span className="w-6 h-6 rounded-full bg-cyan-500/20 text-cyan-400 text-xs flex items-center justify-center" style={{ fontWeight: 700 }}>2</span>
-                    第一路：让 OpenClaw 能"指挥" DeepMCP（老板@专家）
-                  </h3>
-                  <p className="text-gray-400 text-sm leading-relaxed mb-3">
-                    这一步是让 OpenClaw 知道："我有个叫 DeepMCP 的手下，它擅长看图说话"。
-                    配置完成后，你在 OpenClaw 聊天窗口发一张图，它就能自动调用 DeepMCP 做目标检测。
-                  </p>
-
-                  <div className="mb-3">
-                    <p className="text-white text-sm font-medium mb-2">打开 OpenClaw 配置文件</p>
-                    <p className="text-gray-500 text-xs mb-2">文件位置：<code className="text-cyan-300">~/.openclaw/openclaw.json</code>（JSON5 格式，支持注释）</p>
-                  </div>
-
-                  <CodeBlock
-                    copyKey="step2-config"
-                    lang="json"
-                    code={`{
-  // ... 你原来的配置 ...
-
-  plugins: {
-    entries: {
-      acpx: {
-        enabled: true,
-        config: {
-          mcpServers: {
-            deepmcp: {
-              // DeepMCP 的 SSE 端点（注意是 /sse，不是 /mcp）
-              url: "http://localhost:8081/sse",
-
-              // 启用哪些工具（白名单）
-              tools: [
-                "yolo26_detect",
-                "paddleocr_recognize",
-                "sam2_segment",
-                "whisper_transcribe"
-              ],
-
-              // 安全设置：不需要额外认证（都在本机跑）
-              auth: { type: "none" },
-
-              // 单次调用最长等 60 秒
-              timeout: 60
-            }
-          }
-        }
-      }
-    }
-  }
-}`}
-                  />
-
-                  <div className="mb-3 mt-4">
-                    <p className="text-white text-sm font-medium mb-2">保存后重启 OpenClaw</p>
-                    <CodeBlock copyKey="step2-restart" lang="bash" code={`# 按 Ctrl+C 停止旧进程，再重新启动
-openclaw gateway`} />
-                  </div>
-
-                  <div className="mb-3">
-                    <p className="text-white text-sm font-medium mb-2">验证是否连通</p>
-                    <p className="text-gray-500 text-xs mb-2">在 OpenClaw 的任意聊天窗口发消息：</p>
-                    <CodeBlock copyKey="step2-test" lang="text" code={`请用 yolo26_detect 工具分析这张照片里有多少人
-[附上一张照片]`} />
-                  </div>
-
-                  <div className="p-3 rounded-lg border border-green-500/20 bg-green-500/5 text-green-300 text-xs">
-                    如果 OpenClaw 回复了检测结果（比如"图中有 3 个人，分别在…"），说明第一路已经通了。这就是标准的 MCP 单向调用。
-                  </div>
-                </div>
-
-                {/* 第三步 */}
-                <div>
-                  <h3 className="text-white mb-3 flex items-center gap-2" style={{ fontWeight: 600 }}>
-                    <span className="w-6 h-6 rounded-full bg-cyan-500/20 text-cyan-400 text-xs flex items-center justify-center" style={{ fontWeight: 700 }}>3</span>
-                    第二路：让 DeepMCP 能"汇报"给 OpenClaw（专家@老板）
-                  </h3>
-                  <p className="text-gray-400 text-sm leading-relaxed mb-3">
-                    第一路是老板主动找专家。但如果专家处理一张超大图片要 30 秒，老板不想干等；或者专家想主动说"模型加载好了"、"推理出错了"——这就需要第二路。
-                    <br/><br/>
-                    原理很简单：DeepMCP 完成任务后，主动发一条 HTTP 消息到 OpenClaw 的"收件箱"（叫做 Hooks）。
-                  </p>
-
-                  <div className="mb-3">
-                    <p className="text-white text-sm font-medium mb-2">先给 OpenClaw 打开收件箱</p>
-                    <p className="text-gray-500 text-xs mb-2">在 <code className="text-cyan-300">~/.openclaw/openclaw.json</code> 里增加 hooks 配置：</p>
-                  </div>
-
-                  <CodeBlock
-                    copyKey="step3-hooks"
-                    lang="json"
-                    code={`{
-  // ... 你原来的配置 ...
-
-  hooks: {
-    enabled: true,
-
-    // 收件箱的统一前缀，默认就是 /hooks
-    path: "/hooks",
-
-    // 验证口令（防止陌生人冒充 DeepMCP 给你发消息）
-    token: "my-secret-token-123",
-
-    // 把来自 DeepMCP 的消息交给 AI 处理
-    mappings: [
-      {
-        // 匹配路径：DeepMCP 发到 /hooks/deepmcp 的消息都由这条规则处理
-        match: { path: "deepmcp" },
-
-        // 动作：交给 AI 助手处理
-        action: "agent",
-
-        // 会话名称
-        sessionKey: "hook:deepmcp:results",
-
-        // 消息模板：把 DeepMCP 推送的内容转成 AI 能看懂的格式
-        messageTemplate: "DeepMCP 任务完成\\n任务ID: {{task_id}}\\n工具: {{tool}}\\n结果: {{result}}",
-
-        // 唤醒模式：立即处理
-        wakeMode: "now",
-
-        // 是否通过聊天渠道推送结果
-        deliver: true
-      }
-    ]
-  }
-}`}
-                  />
-
-                  <div className="mb-3 mt-4">
-                    <p className="text-white text-sm font-medium mb-2">再给 DeepMCP 配置"发件人"</p>
-                    <p className="text-gray-500 text-xs mb-2">在 <code className="text-cyan-300">deepmcp.config.yaml</code> 里增加 webhook 推送：</p>
-                  </div>
-
-                  <CodeBlock
-                    copyKey="step3-webhook"
-                    lang="yaml"
-                    code={`webhooks:
-  openclaw:
-    # OpenClaw 的收件箱地址
-    url: "http://localhost:18789/hooks/deepmcp"
-
-    # 发生这些事件时自动推送
-    events:
-      - inference.complete    # 推理完成
-      - inference.failed      # 推理失败
-      - model.loaded          # 模型加载完毕
-
-    # 安全头：口令要和 OpenClaw 配置里的一致
-    headers:
-      Authorization: "Bearer my-secret-token-123"
-
-    # 如果网络抖了，最多重试 3 次
-    retry: 3
-    timeout: 10s`}
-                  />
-
-                  <div className="mb-3 mt-4">
-                    <p className="text-white text-sm font-medium mb-2">保存配置，两边都重启</p>
-                    <CodeBlock copyKey="step3-restart" lang="bash" code={`# 1. 重启 DeepMCP
-deepmcp serve --config deepmcp.config.yaml
-
-# 2. 重启 OpenClaw
-openclaw gateway`} />
-                  </div>
-                </div>
-
-                {/* 第四步 */}
-                <div>
-                  <h3 className="text-white mb-3 flex items-center gap-2" style={{ fontWeight: 600 }}>
-                    <span className="w-6 h-6 rounded-full bg-cyan-500/20 text-cyan-400 text-xs flex items-center justify-center" style={{ fontWeight: 700 }}>4</span>
-                    实战：跑一个完整的双向流程
-                  </h3>
-                  <p className="text-gray-400 text-sm leading-relaxed mb-3">
-                    现在两个方向都通了，我们来跑一次完整的"对话"。
-                  </p>
-
-                  <div className="space-y-3">
-                    <div className="p-3 rounded-lg border border-white/5 bg-white/[0.02]">
-                      <p className="text-cyan-300 text-xs font-medium mb-1">第 1 步：老板下任务</p>
-                      <p className="text-gray-400 text-xs">你在 OpenClaw（WhatsApp / Telegram / 网页）发消息：</p>
-                      <p className="text-gray-300 text-xs mt-1 font-mono">"请分析这张照片里有什么物体，置信度大于 0.5 的都要标出来"</p>
-                    </div>
-
-                    <div className="p-3 rounded-lg border border-white/5 bg-white/[0.02]">
-                      <p className="text-cyan-300 text-xs font-medium mb-1">第 2 步：专家收到任务</p>
-                      <p className="text-gray-400 text-xs">OpenClaw 自动调用 DeepMCP 的 <code className="text-cyan-300">yolo26_detect</code> 工具，把照片传过去。</p>
-                      <div className="mt-2 p-2 rounded border border-amber-500/10 bg-amber-500/5 text-amber-300 text-xs">
-                        图片支持多种格式：URL（<code className="text-cyan-300">http://...</code>）、Base64（<code className="text-cyan-300">base64://...</code> 或 <code className="text-cyan-300">data:image/...;base64,...</code>）、本地文件（<code className="text-cyan-300">file:///...</code>）、OpenClaw 媒体引用（<code className="text-cyan-300">media://inbound/&lt;id&gt;</code>）。
-                        <br/><br/>
-                        <strong>聊天附件图片说明</strong>：
-                        <ul className="list-disc list-inside mt-1 space-y-0.5">
-                          <li><strong>大图片（&gt;2MB）</strong>：OpenClaw 会自动保存为 media 文件，prompt 中会出现 <code className="text-cyan-300">[media attached: media://inbound/&lt;id&gt;]</code>，模型可能自动将该 URI 传入工具参数，DeepMCP 已支持解析。</li>
-                          <li><strong>小图片（&lt;2MB）</strong>：作为 inline image 传给模型，没有可引用 URI。当前建议改用<strong>图片 URL</strong> 或 <strong>POST /upload</strong> 端点上传后调用。</li>
-                        </ul>
-                      </div>
-                    </div>
-
-                    <div className="p-3 rounded-lg border border-white/5 bg-white/[0.02]">
-                      <p className="text-cyan-300 text-xs font-medium mb-1">第 3 步：专家主动汇报</p>
-                      <p className="text-gray-400 text-xs">DeepMCP 推理完成后，自动发一条 HTTP POST 到 OpenClaw 的 <code className="text-cyan-300">/hooks/deepmcp</code>：</p>
-                      <CodeBlock copyKey="step4-payload" lang="json" code={`{
-  "event": "inference.complete",
-  "task_id": "task_001",
-  "tool": "yolo26_detect",
-  "result": {
-    "detections": [
-      { "class": "person", "confidence": 0.94, "bbox": [120, 80, 280, 420] },
-      { "class": "car",    "confidence": 0.87, "bbox": [400, 200, 600, 350] }
-    ]
-  }
-}`} />
-                    </div>
-
-                    <div className="p-3 rounded-lg border border-white/5 bg-white/[0.02]">
-                      <p className="text-cyan-300 text-xs font-medium mb-1">第 4 步：老板收到汇报</p>
-                      <p className="text-gray-400 text-xs">OpenClaw 收到 hook 消息后，根据 <code className="text-cyan-300">messageTemplate</code> 转成自然语言，推送到你的聊天窗口：</p>
-                      <p className="text-gray-300 text-xs mt-1 font-mono">"DeepMCP 任务完成。检测到 2 个物体：1 个人（置信度 94%）、1 辆车（置信度 87%）。"</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 第五步 */}
-                <div>
-                  <h3 className="text-white mb-3 flex items-center gap-2" style={{ fontWeight: 600 }}>
-                    <span className="w-6 h-6 rounded-full bg-cyan-500/20 text-cyan-400 text-xs flex items-center justify-center" style={{ fontWeight: 700 }}>5</span>
-                    进阶：不用等老板开口，专家也能主动报警
-                  </h3>
-                  <p className="text-gray-400 text-sm leading-relaxed mb-3">
-                    上面的流程还是"老板先开口"。如果你想让 DeepMCP 自己发现异常就主动通知你（比如监控摄像头里突然出现陌生人），可以加上定时任务。
-                  </p>
-
-                  <CodeBlock
-                    copyKey="step5-cron"
-                    lang="json"
-                    code={`{
-  // ... 在 openclaw.json 里增加 ...
-
-  cron: {
-    enabled: true,
-
-    jobs: [
-      {
-        // 每 5 分钟执行一次
-        schedule: "*/5 * * * *",
-
-        // 调用 DeepMCP 检测工具
-        action: {
-          tool: "yolo26_detect",
-          args: {
-            image: "http://camera.local/current.jpg",
-            classes: ["person"]
-          }
-        },
-
-        // 如果检测到"人"，就通过 hook 推送告警
-        onResult: {
-          condition: "result.detections.length > 0",
-          notify: true,
-          message: "检测到陌生人！共 {{result.detections.length}} 人"
-        }
-      }
-    ]
-  }
-}`}
-                  />
-
-                  <div className="p-3 rounded-lg border border-amber-500/20 bg-amber-500/5 text-amber-300 text-xs mt-3">
-                    这只是 Cron 的一种用法思路。具体语法请参考 OpenClaw 官方 Cron 文档，核心思想是：DeepMCP 不仅能被动等调用，还能被定时触发主动干活。
-                  </div>
-                </div>
-
-                {/* 常见问题 */}
-                <div>
-                  <h3 className="text-white mb-3 flex items-center gap-2" style={{ fontWeight: 600 }}>
-                    <span className="w-6 h-6 rounded-full bg-cyan-500/20 text-cyan-400 text-xs flex items-center justify-center" style={{ fontWeight: 700 }}>6</span>
-                    常见问题排查
-                  </h3>
-                  <div className="space-y-3">
-                    <div className="p-3 rounded-lg border border-white/5 bg-white/[0.02]">
-                      <p className="text-white text-xs font-medium">Q: OpenClaw 说"找不到工具"或报 404？</p>
-                      <p className="text-gray-400 text-xs mt-1">A: DeepMCP 的 SSE 端点是 <code className="text-cyan-300">/sse</code>，不是 <code className="text-cyan-300">/mcp</code>。请把配置里的 url 改成 <code className="text-cyan-300">http://localhost:8081/sse</code>，然后确认 DeepMCP 正在运行，且 <code className="text-cyan-300">tools</code> 白名单里列出了你想用的工具名。</p>
-                    </div>
-                    <div className="p-3 rounded-lg border border-white/5 bg-white/[0.02]">
-                      <p className="text-white text-xs font-medium">Q: OpenClaw / 飞书聊天里发的图片，DeepMCP 能用吗？</p>
-                      <div className="text-gray-400 text-xs mt-1 space-y-1">
-                        <p>A: DeepMCP 支持多种图片输入方式：URL（<code className="text-cyan-300">http://...</code>）、Base64（<code className="text-cyan-300">base64://...</code> 或 <code className="text-cyan-300">data:image/...;base64,...</code>）、本地路径（<code className="text-cyan-300">file:///path/to/img.jpg</code>）、OpenClaw 媒体引用（<code className="text-cyan-300">media://inbound/&lt;id&gt;</code>）。</p>
-                        <p><strong>聊天附件图片分两种情况：</strong></p>
-                        <ul className="list-disc list-inside space-y-0.5">
-                          <li><strong>大图片（&gt;2MB）</strong>：OpenClaw 会自动 offload 到 media store，prompt 中出现 <code className="text-cyan-300">[media attached: media://inbound/&lt;id&gt;]</code>。DeepMCP 已支持解析该 URI，模型可能自动将其传入工具参数。这是不修改 OpenClaw 源码前提下，聊天发图最可行的方案。</li>
-                          <li><strong>小图片（&lt;2MB）</strong>：作为 inline image block 传给模型，没有可引用的 URI。LLM 无法自动将其编码为 base64 传入工具参数。当前 workaround：使用<strong>图片 URL</strong> 或 <strong>POST /upload</strong> 端点直接上传。</li>
-                        </ul>
-                      </div>
-                    </div>
-                    <div className="p-3 rounded-lg border border-white/5 bg-white/[0.02]">
-                      <p className="text-white text-xs font-medium">Q: DeepMCP 推送了，但 OpenClaw 没反应？</p>
-                      <p className="text-gray-400 text-xs mt-1">A: 检查两边的 token 是否一致；检查 OpenClaw 的 <code className="text-cyan-300">hooks.enabled</code> 是否为 <code className="text-cyan-300">true</code>；检查 <code className="text-cyan-300">match.path</code> 和 DeepMCP 推送的 URL 路径是否匹配（比如 <code className="text-cyan-300">/hooks/deepmcp</code>）。</p>
-                    </div>
-                    <div className="p-3 rounded-lg border border-white/5 bg-white/[0.02]">
-                      <p className="text-white text-xs font-medium">Q: 能不能让 OpenClaw 推送消息到 Telegram / 微信？</p>
-                      <p className="text-gray-400 text-xs mt-1">A: 可以。在 hooks mapping 里加 <code className="text-cyan-300">channel: "telegram"</code> 和 <code className="text-cyan-300">to: "你的用户ID"</code>，OpenClaw 就会把结果推送到指定渠道。</p>
-                    </div>
-                    <div className="p-3 rounded-lg border border-white/5 bg-white/[0.02]">
-                      <p className="text-white text-xs font-medium">Q: 两边不在同一台机器上怎么办？</p>
-                      <p className="text-gray-400 text-xs mt-1">A: 把配置里的 <code className="text-cyan-300">localhost</code> 改成实际 IP 或域名，并确保防火墙开放了对应端口。生产环境建议用 Tailscale 或内网穿透，不要直接把端口暴露在公网。</p>
-                    </div>
-                  </div>
-                </div>
-
-              </div>
             </section>
 
             {/* Local Deploy */}
@@ -786,13 +395,13 @@ openclaw gateway`} />
                     code={`# GPU 版本
 docker run -d \\
   --gpus all \\
-  -p 8081:8081 \\
+  -p 8080:8080 \\
   -v ~/.deepmcp/models:/models \\
   deepmcp/deepmcp:latest
 
 # CPU 版本
 docker run -d \\
-  -p 8081:8081 \\
+  -p 8080:8080 \\
   -v ~/.deepmcp/models:/models \\
   deepmcp/deepmcp:cpu`}
                   />
@@ -807,7 +416,7 @@ services:
   deepmcp:
     image: deepmcp/deepmcp:latest
     ports:
-      - "8081:8081"
+      - "8080:8080"
     volumes:
       - ./models:/models
       - ./deepmcp.config.yaml:/config.yaml
