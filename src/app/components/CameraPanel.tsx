@@ -451,7 +451,7 @@ export function CameraPanel() {
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-500">模型</span>
-                <span className="text-gray-300 text-xs">YOLO2026 (yolo26n)</span>
+                <span className="text-gray-300 text-xs">YOLO2026 (yolo2026n)</span>
               </div>
             </div>
           </div>

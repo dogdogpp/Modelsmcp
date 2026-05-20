@@ -20,7 +20,7 @@ const heroImage = "https://images.unsplash.com/photo-1753693765800-afdf24bfefaa?
 
 const codeSnippet = `# 使用 Claude / OpenClaw 调用 YOLO 检测
 {
-  "tool": "yolo26_detect",
+  "tool": "yolo2026_detect",
   "arguments": {
     "image": "https://example.com/photo.jpg",
     "confidence": 0.5,
@@ -74,7 +74,7 @@ const features = [
 ];
 
 const stats = [
-  { value: String(models.length), label: "内置模型" },
+  { value: `${models.length}+`, label: "内置模型" },
   { value: "12ms", label: "最低延迟" },
   { value: "99", label: "支持语言" },
   { value: "100%", label: "本地推理" },
