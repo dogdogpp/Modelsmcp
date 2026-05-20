@@ -65,13 +65,5 @@ METRICS_COLLECTION_INTERVAL = float(os.getenv("METRICS_COLLECTION_INTERVAL", "15
 # Model-specific configs
 MODEL_CONFIG = {
     "yolo26": {"enabled": True, "variant": "yolo26n", "classes": 80},
-    "detr": {"enabled": True, "variant": "resnet50"},
-    "paddleocr": {"enabled": True, "lang": ["ch", "en"]},
-    "sam2": {"enabled": True, "variant": "sam2_hiera_large"},
-    "clip": {"enabled": True, "variant": "ViT-L/14"},
     "whisper": {"enabled": True, "model": "large-v3"},
-    "depth_anything": {"enabled": True, "variant": "v2"},
-    "dinov2": {"enabled": True, "variant": "vitl14"},
-    "yolov8_pose": {"enabled": True, "variant": "yolov8m-pose"},
-    "grounding_dino": {"enabled": True, "variant": "v1.5"},
 }

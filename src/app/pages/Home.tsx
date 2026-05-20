@@ -20,7 +20,7 @@ const heroImage = "https://images.unsplash.com/photo-1753693765800-afdf24bfefaa?
 
 const codeSnippet = `# 使用 Claude / OpenClaw 调用 YOLO 检测
 {
-  "tool": "yolo26_detect",
+  "tool": "yolo2026_detect",
   "arguments": {
     "image": "https://example.com/photo.jpg",
     "confidence": 0.5,
@@ -63,8 +63,8 @@ const features = [
   },
   {
     icon: <Network size={20} className="text-pink-400" />,
-    title: "10+ 模型",
-    description: "涵盖检测、分割、OCR、语音等多种视觉与语音任务",
+    title: "持续扩展",
+    description: "当前已接入目标检测与语音识别，新模型注册后自动生效",
   },
   {
     icon: <Code2 size={20} className="text-blue-400" />,
@@ -74,15 +74,15 @@ const features = [
 ];
 
 const stats = [
-  { value: "10+", label: "内置模型" },
+  { value: `${models.length}+`, label: "内置模型" },
   { value: "12ms", label: "最低延迟" },
-  { value: "80+", label: "支持语言" },
+  { value: "99", label: "支持语言" },
   { value: "100%", label: "本地推理" },
 ];
 
 export function Home() {
   const [copied, setCopied] = useState(false);
-  const featuredModels = models.slice(0, 6);
+  const featuredModels = models;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(codeSnippet);
@@ -137,7 +137,7 @@ export function Home() {
               </h1>
 
               <p className="text-gray-400 text-lg leading-relaxed mb-8 max-w-lg">
-                将 YOLO、OCR、DETR、SAM 等 10+ 深度学习模型封装为标准 MCP 工具，
+                将 YOLO2026、Whisper 等深度学习模型封装为标准 MCP 工具，
                 让 Claude、OpenClaw 等 AI 应用直接调用本地推理能力。
               </p>
 
@@ -400,7 +400,7 @@ export function Home() {
                 step: "02",
                 title: "配置 MCP",
                 description: "在 Claude / OpenClaw 配置文件中添加 DeepMCP 服务地址",
-                code: `"deepmcp": {\n  "url": "http://localhost:8081"\n}`,
+                code: `"deepmcp": {\n  "url": "http://localhost:8080"\n}`,
                 color: "#7c3aed",
               },
               {

@@ -11,7 +11,6 @@ if str(_project_root) not in sys.path:
 
 import asyncio
 import hmac
-import random
 import socket
 import time
 import uuid
@@ -200,7 +199,7 @@ async def _collect_metrics_job():
         partition_key = now.strftime("%Y-%m")
 
         # 1. System metrics (GPU/CPU/disk)
-        # For now, read from get_metrics() mock and persist
+        # Read from get_metrics() and persist
         metrics_data = get_metrics()
         batch = []
 
@@ -256,31 +255,7 @@ async def _collect_metrics_job():
 
         await create_metrics_batch(session, batch)
 
-        # 2. Model performance jitter (update DB with slight variations)
-        from mcp.server import _MOCK_MODEL_STATUS
-        perf_map = {
-            "yolo26": (12.0, 83.0),
-            "detr": (38.0, 26.0),
-            "paddleocr": (45.0, 22.0),
-            "sam2": (23.0, 44.0),
-            "clip": (18.0, 55.0),
-            "whisper": (320.0, 3.1),
-            "depth_anything": (35.0, 28.0),
-            "dinov2": (28.0, 35.0),
-            "yolov8_pose": (15.0, 66.0),
-            "grounding_dino": (55.0, 18.0),
-        }
-        for model_id in _MOCK_MODEL_STATUS:
-            base_lat, base_tput = perf_map.get(model_id, (25.0, 40.0))
-            latency = round(base_lat + random.uniform(-1.5, 1.5), 1)
-            throughput = round(base_tput + random.uniform(-2.0, 2.0), 1)
-            await session.execute(
-                text("UPDATE models SET latency_ms = :lat, throughput_rps = :tput, updated_at = NOW() WHERE id = :id"),
-                {"lat": latency, "tput": throughput, "id": model_id},
-            )
-        await session.commit()
-
-        # 3. Subscription aggregates (latency distribution, mode ratios)
+        # 2. Subscription aggregates (latency distribution, mode ratios)
         lat_dist = await get_latency_distribution(session)
         await create_subscription_aggregate(
             session,
@@ -323,7 +298,7 @@ async def _collect_metrics_job():
             },
         )
 
-        # 4. Ensure partitions exist and cleanup old ones
+        # 3. Ensure partitions exist and cleanup old ones
         await ensure_partitions(engine, retention_days=COMMUNICATION_LOG_RETENTION_DAYS)
 
 
