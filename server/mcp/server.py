@@ -5,7 +5,6 @@ import base64
 import io
 import threading
 import time
-import random
 from typing import Any, AsyncGenerator, Callable
 from pathlib import Path
 
@@ -82,15 +81,7 @@ def call_tool(request: CallRequest) -> CallResponse:
 # Tool-specific progress messages for SSE streaming
 _TOOL_PROGRESS_STEPS: dict[str, list[str]] = {
     "yolo26_detect": ["正在加载 YOLO 模型...", "执行目标检测...", "解析检测结果..."],
-    "detr_detect": ["正在加载 DETR 模型...", "执行 Transformer 检测...", "解析检测结果..."],
-    "paddleocr_recognize": ["正在加载 PaddleOCR 模型...", "执行文本识别...", "整理识别结果..."],
-    "sam2_segment": ["正在加载 SAM2 模型...", "执行图像分割...", "生成分割掩码..."],
-    "clip_encode": ["正在加载 CLIP 模型...", "执行图像-文本编码...", "计算相似度..."],
     "whisper_transcribe": ["正在加载 Whisper 模型...", "预处理音频...", "执行语音转录...", "后处理结果..."],
-    "depth_estimate": ["正在加载 Depth 模型...", "执行深度估计...", "生成深度图..."],
-    "dinov2_embed": ["正在加载 DINOv2 模型...", "执行特征提取...", "归一化嵌入向量..."],
-    "pose_estimate": ["正在加载 Pose 模型...", "执行人体姿态估计...", "解析关键点..."],
-    "grounding_dino_detect": ["正在加载 Grounding DINO 模型...", "执行开放词汇检测...", "解析检测结果..."],
     "camera_list": ["正在发现可用摄像头...", "获取摄像头状态..."],
     "camera_get_frame": ["正在连接摄像头...", "获取视频帧...", "编码图像..."],
     "camera_get_last_detection": ["正在查询检测历史...", "获取最新检测帧...", "编码图像..."],
@@ -259,7 +250,7 @@ def _resolve_camera_id(raw_id: str | None) -> str | None:
 # Tool schemas
 # ---------------------------------------------------------------------------
 
-_MOCK_TOOL_SCHEMAS = [
+_TOOL_SCHEMAS_LIST = [
     McpToolSchema(
         name="yolo26_detect",
         description="YOLO2026 object detection",
@@ -274,54 +265,6 @@ _MOCK_TOOL_SCHEMAS = [
         },
     ),
     McpToolSchema(
-        name="detr_detect",
-        description="DETR Transformer object detection",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "image": {"type": "string", "description": "Image input: supports HTTP/HTTPS URL, base64, data URI, local file path, and OpenClaw media reference (media://inbound/<id>). If the user message contains [media attached: media://inbound/<id>], pass that URI directly as this parameter."},
-                "threshold": {"type": "number", "default": 0.7},
-            },
-            "required": ["image"],
-        },
-    ),
-    McpToolSchema(
-        name="paddleocr_recognize",
-        description="PaddleOCR text recognition",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "image": {"type": "string", "description": "Image input: supports HTTP/HTTPS URL, base64, data URI, local file path, and OpenClaw media reference (media://inbound/<id>). If the user message contains [media attached: media://inbound/<id>], pass that URI directly as this parameter."},
-                "lang": {"type": "string", "default": "ch"},
-            },
-            "required": ["image"],
-        },
-    ),
-    McpToolSchema(
-        name="sam2_segment",
-        description="SAM 2 image/video segmentation",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "image": {"type": "string", "description": "Image input: supports HTTP/HTTPS URL, base64, data URI, local file path, and OpenClaw media reference (media://inbound/<id>). If the user message contains [media attached: media://inbound/<id>], pass that URI directly as this parameter."},
-                "prompts": {"type": "object"},
-            },
-            "required": ["image"],
-        },
-    ),
-    McpToolSchema(
-        name="clip_encode",
-        description="CLIP image-text encoding",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "image": {"type": "string", "description": "Image input: supports HTTP/HTTPS URL, base64, data URI, local file path, and OpenClaw media reference (media://inbound/<id>). If the user message contains [media attached: media://inbound/<id>], pass that URI directly as this parameter."},
-                "texts": {"type": "array", "items": {"type": "string"}},
-                "mode": {"type": "string", "enum": ["classify", "encode"]},
-            },
-        },
-    ),
-    McpToolSchema(
         name="whisper_transcribe",
         description="Whisper speech recognition",
         inputSchema={
@@ -332,56 +275,6 @@ _MOCK_TOOL_SCHEMAS = [
                 "task": {"type": "string", "enum": ["transcribe", "translate"]},
             },
             "required": ["audio"],
-        },
-    ),
-    McpToolSchema(
-        name="depth_estimate",
-        description="Depth Anything depth estimation",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "image": {"type": "string", "description": "Image input: supports HTTP/HTTPS URL, base64, data URI, local file path, and OpenClaw media reference (media://inbound/<id>). If the user message contains [media attached: media://inbound/<id>], pass that URI directly as this parameter."},
-                "model_size": {"type": "string", "enum": ["small", "large"]},
-            },
-            "required": ["image"],
-        },
-    ),
-    McpToolSchema(
-        name="dinov2_embed",
-        description="DINOv2 visual feature extraction",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "image": {"type": "string", "description": "Image input: supports HTTP/HTTPS URL, base64, data URI, local file path, and OpenClaw media reference (media://inbound/<id>). If the user message contains [media attached: media://inbound/<id>], pass that URI directly as this parameter."},
-                "model": {"type": "string"},
-            },
-            "required": ["image"],
-        },
-    ),
-    McpToolSchema(
-        name="pose_estimate",
-        description="YOLOv8 human pose estimation",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "image": {"type": "string", "description": "Image input: supports HTTP/HTTPS URL, base64, data URI, local file path, and OpenClaw media reference (media://inbound/<id>). If the user message contains [media attached: media://inbound/<id>], pass that URI directly as this parameter."},
-                "confidence": {"type": "number", "default": 0.5},
-                "visualize": {"type": "boolean", "default": False},
-            },
-            "required": ["image"],
-        },
-    ),
-    McpToolSchema(
-        name="grounding_dino_detect",
-        description="Grounding DINO open-vocabulary detection",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "image": {"type": "string", "description": "Image input: supports HTTP/HTTPS URL, base64, data URI, local file path, and OpenClaw media reference (media://inbound/<id>). If the user message contains [media attached: media://inbound/<id>], pass that URI directly as this parameter."},
-                "text_prompt": {"type": "string"},
-                "box_threshold": {"type": "number", "default": 0.35},
-            },
-            "required": ["image", "text_prompt"],
         },
     ),
     McpToolSchema(
@@ -464,7 +357,7 @@ def _real_yolov8(args: dict[str, Any]) -> CallResponse:
 
 
 # ---------------------------------------------------------------------------
-# Mock inference handlers
+# Fallback inference handlers (used when optional real handlers are unavailable)
 # ---------------------------------------------------------------------------
 
 def _mock_yolo26(args: dict[str, Any]) -> CallResponse:
@@ -484,70 +377,6 @@ def _mock_yolo26(args: dict[str, Any]) -> CallResponse:
     )
 
 
-def _mock_detr(args: dict[str, Any]) -> CallResponse:
-    time.sleep(0.038)
-    return CallResponse(
-        status="success",
-        model="detr",
-        inference_time="38ms",
-        device="cuda",
-        result={
-            "detections": [
-                {"label": "person", "score": 0.99, "box": {"xmin": 119, "ymin": 78, "xmax": 281, "ymax": 422}},
-            ],
-            "total_objects": 1,
-        },
-    )
-
-
-def _mock_paddleocr(args: dict[str, Any]) -> CallResponse:
-    time.sleep(0.045)
-    return CallResponse(
-        status="success",
-        model="paddleocr",
-        inference_time="45ms",
-        device="cpu",
-        result={
-            "texts": [
-                {"text": "DeepMCP Platform", "confidence": 0.98},
-                {"text": "AI Model Inference Hub", "confidence": 0.96},
-            ],
-            "language": args.get("lang", "ch"),
-        },
-    )
-
-
-def _mock_sam2(args: dict[str, Any]) -> CallResponse:
-    time.sleep(0.023)
-    return CallResponse(
-        status="success",
-        model="sam2",
-        inference_time="23ms",
-        device="cuda",
-        result={
-            "masks": [{"id": 0, "area": 45231, "stability_score": 0.97}],
-            "iou_predictions": [0.97],
-        },
-    )
-
-
-def _mock_clip(args: dict[str, Any]) -> CallResponse:
-    time.sleep(0.018)
-    texts = args.get("texts", ["a cat", "a dog", "a bird"])
-    return CallResponse(
-        status="success",
-        model="clip",
-        inference_time="18ms",
-        device="cuda",
-        result={
-            "results": [
-                {"text": t, "similarity": round(0.9 - i * 0.15 + random.random() * 0.1, 2)}
-                for i, t in enumerate(texts)
-            ]
-        },
-    )
-
-
 def _mock_whisper(args: dict[str, Any]) -> CallResponse:
     time.sleep(0.320)
     return CallResponse(
@@ -561,75 +390,6 @@ def _mock_whisper(args: dict[str, Any]) -> CallResponse:
                 {"start": 0.0, "end": 3.2, "text": "欢迎使用 DeepMCP 语音识别服务"},
             ],
             "text": "欢迎使用 DeepMCP 语音识别服务",
-        },
-    )
-
-
-def _mock_depth(args: dict[str, Any]) -> CallResponse:
-    time.sleep(0.035)
-    return CallResponse(
-        status="success",
-        model="depth_anything",
-        inference_time="35ms",
-        device="cuda",
-        result={
-            "depth_map": "base64://[depth_map_data]",
-            "min_depth": 0.42,
-            "max_depth": 18.7,
-            "format": "colormap",
-        },
-    )
-
-
-def _mock_dinov2(args: dict[str, Any]) -> CallResponse:
-    time.sleep(0.028)
-    return CallResponse(
-        status="success",
-        model="dinov2",
-        inference_time="28ms",
-        device="cuda",
-        result={
-            "embedding": "[1024-dim vector]",
-            "embedding_norm": 1.0,
-            "patch_tokens": "196 x 1024",
-        },
-    )
-
-
-def _mock_pose(args: dict[str, Any]) -> CallResponse:
-    time.sleep(0.015)
-    return CallResponse(
-        status="success",
-        model="yolov8_pose",
-        inference_time="15ms",
-        device="cuda",
-        result={
-            "persons": [
-                {
-                    "confidence": 0.94,
-                    "keypoints": {
-                        "nose": [198, 95, 0.98],
-                        "left_shoulder": [160, 145, 0.96],
-                        "right_shoulder": [238, 143, 0.97],
-                    },
-                }
-            ]
-        },
-    )
-
-
-def _mock_grounding_dino(args: dict[str, Any]) -> CallResponse:
-    time.sleep(0.055)
-    return CallResponse(
-        status="success",
-        model="grounding_dino",
-        inference_time="55ms",
-        device="cuda",
-        result={
-            "prompt": args.get("text_prompt", ""),
-            "detections": [
-                {"phrase": "person", "logit": 0.78, "box": [0.23, 0.18, 0.54, 0.89]},
-            ],
         },
     )
 
@@ -779,17 +539,9 @@ def _camera_get_last_detection(args: dict[str, Any]) -> CallResponse:
 # Model status
 # ---------------------------------------------------------------------------
 
-_MOCK_MODEL_STATUS = {
+_MODEL_STATUS = {
     "yolo26": "online",
-    "detr": "online",
-    "paddleocr": "online",
-    "sam2": "online",
-    "clip": "online",
     "whisper": "online",
-    "depth_anything": "online",
-    "dinov2": "loading",
-    "yolov8_pose": "online",
-    "grounding_dino": "online",
 }
 
 
@@ -836,43 +588,35 @@ def _bridge_real_handler(tool_name: str) -> Callable[[dict[str, Any]], CallRespo
 
 
 def init_tools(mock_mode: bool = False, camera_manager=None) -> None:
-    """Register tool handlers. In non-mock mode, real handlers from server.models are
-    bridged where available; tools without a real implementation fall back to mock."""
+    """Register tool handlers. Real handlers from server.models are bridged where
+    available; tools without a real implementation fall back to built-in defaults."""
     global _CAMERA_MANAGER
     _CAMERA_MANAGER = camera_manager
     if mock_mode:
-        register_tool(_MOCK_TOOL_SCHEMAS[0], _mock_yolo26)
+        register_tool(_TOOL_SCHEMAS_LIST[0], _mock_yolo26)
     else:
         # Pre-load model on startup to avoid cold-start latency on first request
         _load_yolo_model("yolo26n")
-        register_tool(_MOCK_TOOL_SCHEMAS[0], _real_yolov8)
-    register_tool(_MOCK_TOOL_SCHEMAS[1], _mock_detr)
-    register_tool(_MOCK_TOOL_SCHEMAS[2], _mock_paddleocr)
-    register_tool(_MOCK_TOOL_SCHEMAS[3], _mock_sam2)
-    register_tool(_MOCK_TOOL_SCHEMAS[4], _mock_clip)
+        register_tool(_TOOL_SCHEMAS_LIST[0], _real_yolov8)
 
     # Bridge real Whisper handler when available in non-mock mode.
     whisper_handler = None if mock_mode else _bridge_real_handler("whisper_transcribe")
     if whisper_handler is not None:
-        register_tool(_MOCK_TOOL_SCHEMAS[5], whisper_handler)
+        register_tool(_TOOL_SCHEMAS_LIST[1], whisper_handler)
         print("[DeepMCP] Registered REAL whisper handler")
     else:
-        register_tool(_MOCK_TOOL_SCHEMAS[5], _mock_whisper)
+        register_tool(_TOOL_SCHEMAS_LIST[1], _mock_whisper)
         if not mock_mode:
             print("[DeepMCP] WARNING: real whisper handler unavailable; falling back to mock")
 
-    register_tool(_MOCK_TOOL_SCHEMAS[6], _mock_depth)
-    register_tool(_MOCK_TOOL_SCHEMAS[7], _mock_dinov2)
-    register_tool(_MOCK_TOOL_SCHEMAS[8], _mock_pose)
-    register_tool(_MOCK_TOOL_SCHEMAS[9], _mock_grounding_dino)
-    register_tool(_MOCK_TOOL_SCHEMAS[10], _camera_list)
-    register_tool(_MOCK_TOOL_SCHEMAS[11], _camera_get_frame)
-    register_tool(_MOCK_TOOL_SCHEMAS[12], _camera_get_last_detection)
+    register_tool(_TOOL_SCHEMAS_LIST[2], _camera_list)
+    register_tool(_TOOL_SCHEMAS_LIST[3], _camera_get_frame)
+    register_tool(_TOOL_SCHEMAS_LIST[4], _camera_get_last_detection)
 
 
 def get_health() -> HealthResponse:
     # Update yolo26 status based on whether real model is loaded
-    status_map = dict(_MOCK_MODEL_STATUS)
+    status_map = dict(_MODEL_STATUS)
     if _YOLO_MODEL is not None:
         status_map["yolo26"] = "online"
     return HealthResponse(
@@ -887,7 +631,6 @@ def get_health() -> HealthResponse:
 
 
 def get_metrics() -> MetricsResponse:
-    now = time.strftime("%H:%M:%S")
     webhook_metrics = {}
     if _WEBHOOK_QUEUE is not None:
         webhook_metrics = _WEBHOOK_QUEUE.get_metrics()
@@ -899,27 +642,21 @@ def get_metrics() -> MetricsResponse:
         }
     return MetricsResponse(
         latency={
-            "avg_ms": 25.0,
-            "p50_ms": 22.0,
-            "p99_ms": 320.0,
-            "history": [
-                MetricsDataPoint(timestamp=f"2026-04-24T{now}", value=random.randint(15, 45)).model_dump()
-                for _ in range(20)
-            ],
+            "avg_ms": 0.0,
+            "p50_ms": 0.0,
+            "p99_ms": 0.0,
+            "history": [],
         },
         throughput={
-            "req_per_sec": 60.0,
-            "history": [
-                MetricsDataPoint(timestamp=f"2026-04-24T{now}", value=random.randint(40, 80)).model_dump()
-                for _ in range(20)
-            ],
+            "req_per_sec": 0.0,
+            "history": [],
         },
         system={
-            "gpu_utilization": 67,
-            "gpu_memory_used_gb": 14.2,
-            "gpu_memory_total_gb": 24.0,
-            "cpu_utilization": 23,
-            "disk_used_gb": 48.3,
+            "gpu_utilization": 0,
+            "gpu_memory_used_gb": 0.0,
+            "gpu_memory_total_gb": 0.0,
+            "cpu_utilization": 0,
+            "disk_used_gb": 0.0,
         },
         webhook=webhook_metrics,
     )

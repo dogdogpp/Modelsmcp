@@ -128,9 +128,35 @@ export interface SubscriptionsMetrics {
   throughput_history: ThroughputHistoryPoint[];
 }
 
+export interface CallResponse {
+  status: "success" | "error";
+  model: string;
+  inference_time: string;
+  device: string;
+  result: any;
+  error?: { code: string; message: string };
+}
+
 // ---------------------------------------------------------------------------
 // API wrappers
 // ---------------------------------------------------------------------------
+
+async function postJSON<T>(path: string, body: unknown): Promise<T> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const apiKey = import.meta.env.VITE_DEEPMCP_API_KEY || import.meta.env.VITE_API_KEY || "";
+  if (apiKey) headers["X-API-Key"] = apiKey;
+
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "Unknown error");
+    throw new Error(`HTTP ${res.status}: ${text}`);
+  }
+  return res.json() as Promise<T>;
+}
 
 export const api = {
   health: () => fetchJSON<HealthResponse>("/health"),
@@ -140,4 +166,6 @@ export const api = {
   subscriptions: () => fetchJSON<Subscription[]>("/subscriptions"),
   subscriptionLogs: () => fetchJSON<CommunicationLog[]>("/subscriptions/logs"),
   subscriptionMetrics: () => fetchJSON<SubscriptionsMetrics>("/subscriptions/metrics"),
+  call: (tool: string, arguments_: Record<string, unknown>) =>
+    postJSON<CallResponse>("/call", { tool, arguments: arguments_ }),
 };
