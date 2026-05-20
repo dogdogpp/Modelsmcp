@@ -23,9 +23,9 @@ export interface ModelInfo {
 
 export const models: ModelInfo[] = [
   {
-    id: "yolo26",
+    id: "yolo2026",
     name: "YOLO2026",
-    version: "8.3.0",
+    version: "2026.1.0",
     category: "目标检测",
     description: "实时目标检测与分割，支持80+类别识别，毫秒级推理速度",
     longDescription:
@@ -38,13 +38,13 @@ export const models: ModelInfo[] = [
     outputType: ["application/json"],
     color: "#00d4ff",
     icon: "🎯",
-    mcpTool: "yolo26_detect",
+    mcpTool: "yolo2026_detect",
     params: "43M",
     framework: "PyTorch / ONNX",
     license: "AGPL-3.0",
     useCases: ["安防监控", "自动驾驶", "工业质检", "人流统计"],
     mcpExample: `{
-  "tool": "yolo26_detect",
+  "tool": "yolo2026_detect",
   "arguments": {
     "image": "https://example.com/image.jpg",
     "confidence": 0.5,

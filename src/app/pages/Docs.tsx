@@ -26,7 +26,7 @@ const sections = [
 ];
 
 const tools = [
-  { name: "yolo26_detect", desc: "YOLO2026 目标检测", params: ["image", "confidence", "classes", "model_size"] },
+  { name: "yolo2026_detect", desc: "YOLO2026 目标检测", params: ["image", "confidence", "classes", "model_size"] },
   { name: "whisper_transcribe", desc: "Whisper 语音识别", params: ["audio", "language", "task", "word_timestamps"] },
 ];
 
@@ -179,7 +179,7 @@ pipx install deepmcp`}
 deepmcp pull --all
 
 # 下载单个模型
-deepmcp pull yolo26
+deepmcp pull yolo2026
 
 # 启动 MCP 服务（默认端口 8080）
 deepmcp serve --gpu
@@ -202,7 +202,7 @@ curl http://localhost:8080/tools
 # 测试推理
 curl -X POST http://localhost:8080/call \\
   -H "Content-Type: application/json" \\
-  -d '{"tool": "yolo26_detect", "arguments": {"image": "https://example.com/img.jpg"}}'`}
+  -d '{"tool": "yolo2026_detect", "arguments": {"image": "https://example.com/img.jpg"}}'`}
                   />
                 </div>
               </div>
@@ -245,7 +245,7 @@ curl -X POST http://localhost:8080/call \\
 Content-Type: application/json
 
 {
-  "tool": "yolo26_detect",
+  "tool": "yolo2026_detect",
   "arguments": {
     "image": "https://example.com/photo.jpg",
     "confidence": 0.5,
@@ -261,7 +261,7 @@ Content-Type: application/json
                 lang="json"
                 code={`{
   "status": "success",
-  "model": "yolo26",
+  "model": "yolo2026",
   "inference_time": "12ms",
   "device": "CUDA",
   "result": {
@@ -320,9 +320,9 @@ inference:
   timeout: 30s
 
 models:
-  yolo26:
+  yolo2026:
     enabled: true
-    variant: "yolo26m"    # n/s/m/l/x
+    variant: "yolo2026m"    # n/s/m/l/x
     weights: "auto"       # auto download or local path
   whisper:
     enabled: true
@@ -352,7 +352,7 @@ security:
       "command": "deepmcp",
       "args": ["serve", "--port", "8080", "--device", "cuda"],
       "env": {
-        "DEEPMCP_MODELS": "yolo26,whisper"
+        "DEEPMCP_MODELS": "yolo2026,whisper"
       }
     }
   }
@@ -375,7 +375,7 @@ mcp_servers:
     transport: "http"
     url: "http://localhost:8080/mcp"
     tools:
-      - yolo26_detect
+      - yolo2026_detect
       - whisper_transcribe
     auth:
       type: none
