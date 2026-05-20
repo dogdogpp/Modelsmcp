@@ -1,55 +1,12 @@
 import { motion } from "motion/react";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   Activity,
   CheckCircle,
   AlertCircle,
-  Clock,
-  Cpu,
-  MemoryStick,
-  Zap,
   RefreshCw,
-  Server,
-  HardDrive,
 } from "lucide-react";
 import { models } from "../data/models";
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-
-// Generate mock latency history
-function generateHistory(base: number, points = 20) {
-  return Array.from({ length: points }, (_, i) => ({
-    time: `${i}m`,
-    value: Math.round(base + (Math.random() - 0.5) * base * 0.3),
-  }));
-}
-
-const latencyHistory = generateHistory(25);
-const throughputHistory = generateHistory(60);
-
-const systemStats = [
-  { label: "GPU 利用率", value: "67%", sub: "RTX 4090", color: "#00d4ff", icon: <Cpu size={16} /> },
-  { label: "GPU 显存", value: "14.2 / 24 GB", sub: "59% 使用", color: "#7c3aed", icon: <MemoryStick size={16} /> },
-  { label: "CPU 利用率", value: "23%", sub: "16 核心", color: "#00ff88", icon: <Server size={16} /> },
-  { label: "磁盘空间", value: "48.3 GB", sub: "模型存储", color: "#f59e0b", icon: <HardDrive size={16} /> },
-];
-
-const incidents = [
-  { time: "2026-03-29 10:23", type: "info", msg: "SAM2 模型权重更新至 v2.1.0" },
-  { time: "2026-03-28 14:55", type: "warning", msg: "DINOv2 模型冷启动加载中（预计 2 分钟）" },
-  { time: "2026-03-27 09:10", type: "info", msg: "新增 Grounding DINO v1.5 支持" },
-  { time: "2026-03-25 16:00", type: "resolved", msg: "GPU 显存不足问题已修复（已优化批处理队列）" },
-];
-
-const CustomTooltip = ({ active, payload }: any) => {
-  if (active && payload && payload.length) {
-    return (
-      <div className="px-3 py-2 rounded-lg border border-white/10 bg-[#0f1520] text-xs text-gray-300">
-        {payload[0].value}{payload[0].name === "延迟" ? "ms" : " req/s"}
-      </div>
-    );
-  }
-  return null;
-};
 
 export function Status() {
   const [lastUpdated, setLastUpdated] = useState(new Date());
@@ -131,90 +88,6 @@ export function Status() {
           </div>
         </motion.div>
 
-        {/* System stats */}
-        <div>
-          <h2 className="text-white mb-4" style={{ fontWeight: 600 }}>系统资源</h2>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {systemStats.map((stat, i) => (
-              <motion.div
-                key={stat.label}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.05 }}
-                className="p-5 rounded-2xl border border-white/5 bg-white/[0.02]"
-              >
-                <div className="flex items-center gap-2 mb-3">
-                  <div style={{ color: stat.color }}>{stat.icon}</div>
-                  <span className="text-gray-500 text-xs">{stat.label}</span>
-                </div>
-                <div className="text-white mb-0.5" style={{ fontSize: "1.4rem", fontWeight: 700 }}>{stat.value}</div>
-                <div className="text-gray-500 text-xs">{stat.sub}</div>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-
-        {/* Charts */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="p-5 rounded-2xl border border-white/5 bg-white/[0.02]">
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="text-white text-sm" style={{ fontWeight: 600 }}>平均推理延迟</h3>
-              <span className="text-cyan-400 text-xs" style={{ fontWeight: 600 }}>~25ms</span>
-            </div>
-            <ResponsiveContainer width="100%" height={160}>
-              <AreaChart data={latencyHistory}>
-                <defs>
-                  <linearGradient id="latencyGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#00d4ff" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#00d4ff" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
-                <XAxis dataKey="time" tick={{ fill: "#555", fontSize: 10 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: "#555", fontSize: 10 }} axisLine={false} tickLine={false} />
-                <Tooltip content={<CustomTooltip />} />
-                <Area
-                  type="monotone"
-                  dataKey="value"
-                  name="延迟"
-                  stroke="#00d4ff"
-                  strokeWidth={2}
-                  fill="url(#latencyGrad)"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-
-          <div className="p-5 rounded-2xl border border-white/5 bg-white/[0.02]">
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="text-white text-sm" style={{ fontWeight: 600 }}>请求吞吐量</h3>
-              <span className="text-green-400 text-xs" style={{ fontWeight: 600 }}>~60 req/s</span>
-            </div>
-            <ResponsiveContainer width="100%" height={160}>
-              <AreaChart data={throughputHistory}>
-                <defs>
-                  <linearGradient id="throughputGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#00ff88" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#00ff88" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
-                <XAxis dataKey="time" tick={{ fill: "#555", fontSize: 10 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: "#555", fontSize: 10 }} axisLine={false} tickLine={false} />
-                <Tooltip content={<CustomTooltip />} />
-                <Area
-                  type="monotone"
-                  dataKey="value"
-                  name="吞吐"
-                  stroke="#00ff88"
-                  strokeWidth={2}
-                  fill="url(#throughputGrad)"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
         {/* Model status table */}
         <div>
           <h2 className="text-white mb-4" style={{ fontWeight: 600 }}>模型状态</h2>
@@ -263,40 +136,6 @@ export function Status() {
                 <div className="hidden md:block text-cyan-400 text-sm" style={{ fontWeight: 500 }}>{model.latency}</div>
                 <div className="hidden md:block text-gray-400 text-sm">{model.throughput}</div>
                 <div className="hidden md:block text-gray-500 text-xs">{model.params}</div>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-
-        {/* Incidents */}
-        <div>
-          <h2 className="text-white mb-4" style={{ fontWeight: 600 }}>近期事件</h2>
-          <div className="space-y-3">
-            {incidents.map((inc, i) => (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.08 }}
-                className="flex items-start gap-4 p-4 rounded-xl border border-white/5 bg-white/[0.02]"
-              >
-                <div className={`mt-0.5 shrink-0 ${
-                  inc.type === "info" ? "text-cyan-400" :
-                  inc.type === "warning" ? "text-amber-400" : "text-green-400"
-                }`}>
-                  {inc.type === "info" ? <Activity size={15} /> :
-                   inc.type === "warning" ? <AlertCircle size={15} /> : <CheckCircle size={15} />}
-                </div>
-                <div className="flex-1">
-                  <p className="text-gray-300 text-sm">{inc.msg}</p>
-                  <p className="text-gray-600 text-xs mt-1">{inc.time}</p>
-                </div>
-                <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${
-                  inc.type === "info" ? "bg-cyan-500/10 text-cyan-400" :
-                  inc.type === "warning" ? "bg-amber-500/10 text-amber-400" : "bg-green-500/10 text-green-400"
-                }`}>
-                  {inc.type === "info" ? "信息" : inc.type === "warning" ? "警告" : "已解决"}
-                </span>
               </motion.div>
             ))}
           </div>
