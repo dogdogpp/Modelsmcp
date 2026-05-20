@@ -25,8 +25,16 @@ const sections = [
 ];
 
 const tools = [
-  { name: "yolo2026_detect", desc: "YOLO2026 目标检测", params: ["image", "confidence", "classes", "model_size"] },
+  { name: "yolov8_detect", desc: "YOLOv8 目标检测", params: ["image", "confidence", "classes", "model_size"] },
+  { name: "detr_detect", desc: "DETR Transformer 检测", params: ["image", "threshold", "return_masks"] },
+  { name: "paddleocr_recognize", desc: "PaddleOCR 文字识别", params: ["image", "lang", "use_angle_cls", "det", "rec"] },
+  { name: "sam2_segment", desc: "SAM 2 图像/视频分割", params: ["image", "prompts", "multimask_output"] },
+  { name: "clip_encode", desc: "CLIP 图文编码", params: ["image", "texts", "mode"] },
   { name: "whisper_transcribe", desc: "Whisper 语音识别", params: ["audio", "language", "task", "word_timestamps"] },
+  { name: "depth_estimate", desc: "Depth Anything 深度估计", params: ["image", "model_size", "output_format"] },
+  { name: "dinov2_embed", desc: "DINOv2 视觉特征提取", params: ["image", "model", "return_patch_tokens"] },
+  { name: "pose_estimate", desc: "YOLOv8 人体姿态估计", params: ["image", "confidence", "visualize"] },
+  { name: "grounding_dino_detect", desc: "开放词汇目标检测", params: ["image", "text_prompt", "box_threshold"] },
 ];
 
 function CodeBlock({ code, lang = "bash", copyKey }: { code: string; lang?: string; copyKey: string }) {
@@ -125,17 +133,17 @@ export function Docs() {
             <section id="intro">
               <h2 className="text-white mb-4" style={{ fontSize: "1.5rem", fontWeight: 700 }}>简介</h2>
               <p className="text-gray-400 leading-relaxed mb-4">
-                DeepMCP 是一个开源的深度学习模型 MCP 服务平台，将主流视觉、语音模型封装为标准
+                DeepMCP 是一个开源的深度学习模型 MCP 服务平台，将主流视觉、语音、多模态模型封装为标准
                 Model Context Protocol (MCP) 工具，让 AI 应用可以直接调用本地推理能力。
               </p>
               <p className="text-gray-400 leading-relaxed mb-6">
                 通过 DeepMCP，您可以在保护数据隐私的前提下，让 Claude、OpenClaw 等 AI 助手具备：
-                目标检测、语音转录等强大的感知能力。
+                目标检测、图像分割、文字识别、语音转录、深度估计等强大的视觉感知能力。
               </p>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {[
                   { icon: <Zap size={16} className="text-cyan-400" />, title: "毫秒级推理", desc: "本地 GPU 推理，延迟最低 12ms" },
-                  { icon: <Package size={16} className="text-purple-400" />, title: "模型可扩展", desc: "新模型注册后前端自动感知" },
+                  { icon: <Package size={16} className="text-purple-400" />, title: "10+ 模型", desc: "覆盖主流 CV/NLP 任务" },
                   { icon: <Server size={16} className="text-green-400" />, title: "标准 MCP", desc: "兼容所有 MCP 客户端" },
                 ].map((item) => (
                   <div key={item.title} className="p-4 rounded-xl border border-white/5 bg-white/[0.02]">
@@ -178,7 +186,7 @@ pipx install deepmcp`}
 deepmcp pull --all
 
 # 下载单个模型
-deepmcp pull yolo2026 whisper
+deepmcp pull yolov8 paddleocr
 
 # 启动 MCP 服务（默认端口 8080）
 deepmcp serve --gpu
@@ -201,7 +209,7 @@ curl http://localhost:8080/tools
 # 测试推理
 curl -X POST http://localhost:8080/call \\
   -H "Content-Type: application/json" \\
-  -d '{"tool": "yolo2026_detect", "arguments": {"image": "https://example.com/img.jpg"}}'`}
+  -d '{"tool": "yolov8_detect", "arguments": {"image": "https://example.com/img.jpg"}}'`}
                   />
                 </div>
               </div>
@@ -244,7 +252,7 @@ curl -X POST http://localhost:8080/call \\
 Content-Type: application/json
 
 {
-  "tool": "yolo2026_detect",
+  "tool": "yolov8_detect",
   "arguments": {
     "image": "https://example.com/photo.jpg",
     "confidence": 0.5,
@@ -260,7 +268,7 @@ Content-Type: application/json
                 lang="json"
                 code={`{
   "status": "success",
-  "model": "yolo2026",
+  "model": "yolov8",
   "inference_time": "12ms",
   "device": "CUDA",
   "result": {
@@ -319,10 +327,16 @@ inference:
   timeout: 30s
 
 models:
-  yolo2026:
+  yolov8:
     enabled: true
-    variant: "yolo2026m"  # n/s/m/l/x
+    variant: "yolov8m"    # n/s/m/l/x
     weights: "auto"       # auto download or local path
+  paddleocr:
+    enabled: true
+    lang: ["ch", "en"]
+  sam2:
+    enabled: true
+    variant: "sam2_hiera_large"
   whisper:
     enabled: true
     model: "large-v3"
@@ -351,7 +365,7 @@ security:
       "command": "deepmcp",
       "args": ["serve", "--port", "8080", "--device", "cuda"],
       "env": {
-        "DEEPMCP_MODELS": "yolo2026,whisper"
+        "DEEPMCP_MODELS": "yolov8,paddleocr,sam2,whisper"
       }
     }
   }
@@ -374,7 +388,9 @@ mcp_servers:
     transport: "http"
     url: "http://localhost:8080/mcp"
     tools:
-      - yolo2026_detect
+      - yolov8_detect
+      - paddleocr_recognize
+      - sam2_segment
       - whisper_transcribe
     auth:
       type: none
@@ -446,7 +462,7 @@ services:
                   },
                   {
                     q: "如何添加自定义模型？",
-                    a: "实现 DeepMCP 提供的 BaseModel 接口，注册到模型注册表即可。前端将自动感知并展示新模型。",
+                    a: "实现 DeepMCP 提供的 BaseModel 接口，注册到模型注册表即可。详见扩展开发文档。",
                   },
                   {
                     q: "推理数据会上传到云端吗？",

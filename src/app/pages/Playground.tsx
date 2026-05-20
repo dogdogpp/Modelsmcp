@@ -1,7 +1,8 @@
 import { motion } from "motion/react";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import {
   Play,
+  Upload,
   Copy,
   CheckCircle,
   RotateCcw,
@@ -12,6 +13,133 @@ import {
   Sparkles,
 } from "lucide-react";
 import { models } from "../data/models";
+
+const cvImage = "https://images.unsplash.com/photo-1554936970-ce06538caf54?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjb21wdXRlciUyMHZpc2lvbiUyMG9iamVjdCUyMGRldGVjdGlvbiUyMHRlY2hub2xvZ3l8ZW58MXx8fHwxNzc0NzcxMDU4fDA&ixlib=rb-4.1.0&q=80&w=1080";
+
+// Mock inference results per model
+const mockResults: Record<string, object> = {
+  yolov8: {
+    model: "yolov8",
+    inference_time: "12ms",
+    device: "CUDA (RTX 4090)",
+    detections: [
+      { class: "person", confidence: 0.94, bbox: [120, 80, 280, 420], class_id: 0 },
+      { class: "car", confidence: 0.87, bbox: [350, 150, 680, 380], class_id: 2 },
+      { class: "bicycle", confidence: 0.73, bbox: [20, 200, 110, 400], class_id: 1 },
+    ],
+    total_objects: 3,
+  },
+  detr: {
+    model: "detr",
+    inference_time: "38ms",
+    device: "CUDA (RTX 4090)",
+    detections: [
+      { label: "person", score: 0.99, box: { xmin: 119, ymin: 78, xmax: 281, ymax: 422 } },
+      { label: "car", score: 0.96, box: { xmin: 348, ymin: 148, xmax: 682, ymax: 381 } },
+    ],
+    total_objects: 2,
+  },
+  paddleocr: {
+    model: "paddleocr",
+    inference_time: "45ms",
+    device: "CPU",
+    texts: [
+      { text: "DeepMCP Platform", confidence: 0.98, bbox: [[10, 10], [320, 10], [320, 45], [10, 45]] },
+      { text: "AI Model Inference Hub", confidence: 0.96, bbox: [[10, 60], [480, 60], [480, 95], [10, 95]] },
+      { text: "Powered by MCP Protocol", confidence: 0.94, bbox: [[10, 110], [420, 110], [420, 145], [10, 145]] },
+    ],
+    language: "en",
+  },
+  sam2: {
+    model: "sam2",
+    inference_time: "23ms",
+    device: "CUDA (RTX 4090)",
+    masks: [
+      { id: 0, area: 45231, stability_score: 0.97, bbox: [120, 80, 160, 340] },
+      { id: 1, area: 89432, stability_score: 0.95, bbox: [350, 150, 330, 230] },
+    ],
+    iou_predictions: [0.97, 0.95],
+  },
+  clip: {
+    model: "clip",
+    inference_time: "18ms",
+    device: "CUDA (RTX 4090)",
+    results: [
+      { text: "a person walking", similarity: 0.89 },
+      { text: "outdoor street scene", similarity: 0.82 },
+      { text: "urban environment", similarity: 0.78 },
+      { text: "a cat", similarity: 0.12 },
+    ],
+  },
+  whisper: {
+    model: "whisper",
+    inference_time: "320ms",
+    language: "zh",
+    segments: [
+      { start: 0.0, end: 3.2, text: "欢迎使用 DeepMCP 语音识别服务" },
+      { start: 3.2, end: 6.8, text: "支持本地推理，保护数据隐私" },
+    ],
+    text: "欢迎使用 DeepMCP 语音识别服务 支持本地推理，保护数据隐私",
+  },
+  "depth-anything": {
+    model: "depth-anything",
+    inference_time: "35ms",
+    device: "CUDA (RTX 4090)",
+    depth_map: "base64://[depth_map_data]",
+    min_depth: 0.42,
+    max_depth: 18.7,
+    format: "colormap",
+  },
+  dinov2: {
+    model: "dinov2",
+    inference_time: "28ms",
+    device: "CUDA (RTX 4090)",
+    embedding: "[1024-dim vector]",
+    embedding_norm: 1.0,
+    patch_tokens: "196 x 1024",
+  },
+  "yolov8-pose": {
+    model: "yolov8-pose",
+    inference_time: "15ms",
+    device: "CUDA (RTX 4090)",
+    persons: [
+      {
+        confidence: 0.94,
+        bbox: [120, 80, 280, 420],
+        keypoints: {
+          nose: [198, 95, 0.98],
+          left_shoulder: [160, 145, 0.96],
+          right_shoulder: [238, 143, 0.97],
+          left_elbow: [143, 215, 0.92],
+          right_elbow: [258, 212, 0.93],
+          left_wrist: [135, 282, 0.89],
+          right_wrist: [267, 279, 0.88],
+        },
+      },
+    ],
+  },
+  "grounding-dino": {
+    model: "grounding-dino",
+    inference_time: "55ms",
+    device: "CUDA (RTX 4090)",
+    prompt: "person . car . bicycle",
+    detections: [
+      { phrase: "person", logit: 0.78, box: [0.23, 0.18, 0.54, 0.89] },
+      { phrase: "car", logit: 0.82, box: [0.67, 0.34, 0.97, 0.81] },
+    ],
+  },
+};
+
+const sampleImages = [
+  {
+    label: "街景",
+    url: "https://images.unsplash.com/photo-1554936970-ce06538caf54?w=400",
+  },
+  {
+    label: "办公室",
+    url: cvImage,
+  },
+];
 
 export function Playground() {
   const [selectedModel, setSelectedModel] = useState(models[0]);
@@ -27,32 +155,32 @@ export function Playground() {
     setIsRunning(true);
     setResult(null);
     const newLogs: string[] = [];
-
+    
     newLogs.push(`[${new Date().toLocaleTimeString()}] 初始化推理引擎...`);
     setLogs([...newLogs]);
     await new Promise((r) => setTimeout(r, 400));
-
+    
     newLogs.push(`[${new Date().toLocaleTimeString()}] 加载模型 ${selectedModel.name}...`);
     setLogs([...newLogs]);
     await new Promise((r) => setTimeout(r, 600));
-
+    
     newLogs.push(`[${new Date().toLocaleTimeString()}] 预处理输入数据...`);
     setLogs([...newLogs]);
     await new Promise((r) => setTimeout(r, 300));
-
+    
     newLogs.push(`[${new Date().toLocaleTimeString()}] 执行推理 (${selectedModel.latency})...`);
     setLogs([...newLogs]);
     await new Promise((r) => setTimeout(r, 800));
-
-    newLogs.push(`[${new Date().toLocaleTimeString()}] 推理完成，等待后端响应...`);
+    
+    newLogs.push(`[${new Date().toLocaleTimeString()}] ✓ 推理完成`);
     setLogs([...newLogs]);
-
-    setResult({
-      status: "pending",
-      message: "推理请求已提交，真实结果需从后端服务获取。",
+    
+    const mockResult = mockResults[selectedModel.id] || {
       model: selectedModel.id,
-      requestedAt: new Date().toISOString(),
-    });
+      inference_time: selectedModel.latency,
+      result: "success",
+    };
+    setResult(mockResult);
     setIsRunning(false);
   };
 
@@ -194,6 +322,24 @@ export function Playground() {
                     <span>0.95</span>
                   </div>
                 </div>
+
+                <div>
+                  <label className="text-gray-500 text-xs mb-2 block">快速示例图片</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {sampleImages.map((img) => (
+                      <button
+                        key={img.label}
+                        onClick={() => setImageUrl(img.url)}
+                        className="relative rounded-lg overflow-hidden border border-white/10 hover:border-cyan-500/30 transition-all group aspect-video"
+                      >
+                        <img src={img.url} alt={img.label} className="w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-opacity" />
+                        <div className="absolute inset-0 flex items-end p-1.5">
+                          <span className="text-white text-xs px-1.5 py-0.5 rounded bg-black/60">{img.label}</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -294,7 +440,17 @@ export function Playground() {
                 </div>
                 <div className="p-4 max-h-80 overflow-y-auto">
                   <pre className="text-xs font-mono text-gray-300 leading-relaxed whitespace-pre-wrap">
-                    {JSON.stringify(result, null, 2)}
+                    {JSON.stringify(result, null, 2)
+                      .split("\n")
+                      .map((line, i) => {
+                        let color = "text-gray-300";
+                        if (line.includes('"confidence"') || line.includes('"score"') || line.includes('"logit"')) color = "text-green-300";
+                        else if (line.includes('"class"') || line.includes('"text"') || line.includes('"phrase"') || line.includes('"label"')) color = "text-cyan-300";
+                        else if (line.includes('"inference_time"') || line.includes('"device"')) color = "text-amber-300";
+                        return (
+                          <span key={i} className={`block ${color}`}>{line}</span>
+                        );
+                      })}
                   </pre>
                 </div>
               </motion.div>
@@ -307,7 +463,7 @@ export function Playground() {
                   <ImageIcon size={20} className="text-gray-600" />
                 </div>
                 <p className="text-gray-500 text-sm">配置参数后点击「运行推理」</p>
-                <p className="text-gray-600 text-xs mt-1">真实推理结果需从后端服务获取</p>
+                <p className="text-gray-600 text-xs mt-1">结果将在此处展示</p>
               </div>
             )}
           </div>

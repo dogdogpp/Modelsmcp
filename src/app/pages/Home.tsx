@@ -20,7 +20,7 @@ const heroImage = "https://images.unsplash.com/photo-1753693765800-afdf24bfefaa?
 
 const codeSnippet = `# 使用 Claude / OpenClaw 调用 YOLO 检测
 {
-  "tool": "yolo2026_detect",
+  "tool": "yolov8_detect",
   "arguments": {
     "image": "https://example.com/photo.jpg",
     "confidence": 0.5,
@@ -44,12 +44,12 @@ const features = [
   {
     icon: <Zap size={20} className="text-cyan-400" />,
     title: "毫秒级推理",
-    description: "本地 GPU/CPU 推理，无需网络延迟，目标检测低至 12ms",
+    description: "本地 GPU/CPU 推理，无需网络延迟，YOLO 检测低至 12ms",
   },
   {
     icon: <Shield size={20} className="text-purple-400" />,
     title: "数据安全",
-    description: "完全本地运行，图像与音频数据不离开设备，保护隐私安全",
+    description: "完全本地运行，图像数据不离开设备，保护隐私安全",
   },
   {
     icon: <Globe size={20} className="text-green-400" />,
@@ -63,8 +63,8 @@ const features = [
   },
   {
     icon: <Network size={20} className="text-pink-400" />,
-    title: "模型可扩展",
-    description: "注册新模型后前端自动感知，动态展示模型能力与状态",
+    title: "10+ 模型",
+    description: "涵盖检测、分割、OCR、语音等多种视觉与语音任务",
   },
   {
     icon: <Code2 size={20} className="text-blue-400" />,
@@ -74,7 +74,7 @@ const features = [
 ];
 
 const stats = [
-  { value: `${models.length}+`, label: "内置模型" },
+  { value: "10+", label: "内置模型" },
   { value: "12ms", label: "最低延迟" },
   { value: "80+", label: "支持语言" },
   { value: "100%", label: "本地推理" },
@@ -137,9 +137,8 @@ export function Home() {
               </h1>
 
               <p className="text-gray-400 text-lg leading-relaxed mb-8 max-w-lg">
-                将 YOLO2026、Whisper 等深度学习模型封装为标准 MCP 工具，
+                将 YOLO、OCR、DETR、SAM 等 10+ 深度学习模型封装为标准 MCP 工具，
                 让 Claude、OpenClaw 等 AI 应用直接调用本地推理能力。
-                新模型注册后前端自动感知并展示。
               </p>
 
               <div className="flex flex-wrap gap-4">
@@ -209,7 +208,7 @@ export function Home() {
                       else if (line.includes('"tool"') || line.includes('"arguments"')) color = "text-cyan-300";
                       else if (line.includes('"image"') || line.includes('"confidence"') || line.includes('"classes"')) color = "text-purple-300";
                       else if (line.includes('"detections"') || line.includes('"class"') || line.includes('"confidence"') || line.includes('"bbox"') || line.includes('"inference_time"')) color = "text-blue-300";
-                      else if (line.includes("yolo2026_detect") || line.includes("person") || line.includes("car") || line.includes("0.") || line.includes("12ms")) color = "text-amber-300";
+                      else if (line.includes("yolov8_detect") || line.includes("person") || line.includes("car") || line.includes("0.") || line.includes("12ms")) color = "text-amber-300";
                       return (
                         <div key={i} className={`${color}`}>{line || " "}</div>
                       );
