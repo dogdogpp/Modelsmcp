@@ -64,6 +64,6 @@ METRICS_COLLECTION_INTERVAL = float(os.getenv("METRICS_COLLECTION_INTERVAL", "15
 
 # Model-specific configs
 MODEL_CONFIG = {
-    "yolo26": {"enabled": True, "variant": "yolo26n", "classes": 80},
+    "yolo2026": {"enabled": True, "variant": "yolo2026n", "classes": 80},
     "whisper": {"enabled": True, "model": "large-v3"},
 }

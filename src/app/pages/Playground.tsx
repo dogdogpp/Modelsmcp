@@ -30,7 +30,7 @@ export function Playground() {
   const isAudioModel = selectedModel.inputType.some((t) => t.startsWith("audio/"));
 
   const buildArguments = () => {
-    if (selectedModel.id === "yolo26") {
+    if (selectedModel.id === "yolo2026") {
       return { image: inputUrl, confidence };
     }
     if (selectedModel.id === "whisper") {
@@ -206,7 +206,7 @@ export function Playground() {
                   />
                 </div>
 
-                {selectedModel.id === "yolo26" && (
+                {selectedModel.id === "yolo2026" && (
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
                       <label className="text-gray-500 text-xs">置信度阈值</label>

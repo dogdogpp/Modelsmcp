@@ -15,11 +15,11 @@ from .models import ModelMeta, Incident, Subscription, CommunicationLog, Subscri
 # Seed data derived from frontend models.ts
 MODEL_SEEDS = [
     {
-        "id": "yolo26", "name": "YOLO2026", "category": "目标检测", "version": "8.3.0",
+        "id": "yolo2026", "name": "YOLO2026", "category": "目标检测", "version": "8.3.0",
         "description": "实时目标检测与分割，支持80+类别识别，毫秒级推理速度",
         "long_description": "YOLO2026 是 Ultralytics 推出的最新一代目标检测模型...",
         "params": "43M", "framework": "PyTorch / ONNX", "license": "AGPL-3.0",
-        "color": "#00d4ff", "icon": "🎯", "mcp_tool": "yolo26_detect",
+        "color": "#00d4ff", "icon": "🎯", "mcp_tool": "yolo2026_detect",
         "input_types": ["image/jpeg", "image/png", "video/mp4"],
         "output_types": ["application/json"],
         "tags": ["COCO", "实时", "多任务", "ONNX"],
@@ -43,7 +43,7 @@ MODEL_SEEDS = [
 INCIDENT_SEEDS = []
 
 SUBSCRIPTION_SEEDS = [
-    {"id": "sub-001", "model_id": "yolo26", "model_name": "YOLO2026", "status": "active",
+    {"id": "sub-001", "model_id": "yolo2026", "model_name": "YOLO2026", "status": "active",
      "subscribed_at": datetime(2026, 4, 20, 8, 0, 0), "last_active_at": datetime(2026, 5, 13, 6, 30, 0),
      "total_calls": 12450, "success_rate": 0.994, "avg_latency_ms": 12.3},
     {"id": "sub-003", "model_id": "whisper", "model_name": "Whisper", "status": "paused",
@@ -52,13 +52,13 @@ SUBSCRIPTION_SEEDS = [
 ]
 
 LOG_SEEDS = [
-    {"id": "log-001", "timestamp": datetime(2026, 5, 13, 6, 30, 0), "model_id": "yolo26", "model_name": "YOLO2026",
+    {"id": "log-001", "timestamp": datetime(2026, 5, 13, 6, 30, 0), "model_id": "yolo2026", "model_name": "YOLO2026",
      "direction": "inbound", "log_type": "inference", "mode": "HTTP", "status": "success",
      "latency_ms": 11.2, "payload_size_bytes": 245760, "summary": "Detect 2 objects (person, car)"},
     {"id": "log-003", "timestamp": datetime(2026, 5, 13, 6, 29, 30), "model_id": "whisper", "model_name": "Whisper",
      "direction": "inbound", "log_type": "inference", "mode": "Webhook", "status": "success",
      "latency_ms": 312.0, "payload_size_bytes": 102400, "summary": "Transcribe 3.2s audio"},
-    {"id": "log-004", "timestamp": datetime(2026, 5, 13, 6, 29, 15), "model_id": "yolo26", "model_name": "YOLO2026",
+    {"id": "log-004", "timestamp": datetime(2026, 5, 13, 6, 29, 15), "model_id": "yolo2026", "model_name": "YOLO2026",
      "direction": "outbound", "log_type": "webhook", "mode": "Webhook", "status": "success",
      "latency_ms": 45.0, "payload_size_bytes": 2048, "summary": "Delivery to OpenClaw"},
 ]

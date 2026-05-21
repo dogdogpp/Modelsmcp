@@ -43,7 +43,7 @@ class TestSecurityAuth:
         import main
         importlib.reload(main)
         with TestClient(main.app) as client:
-            res = client.post("/call", json={"tool": "yolo26_detect", "arguments": {"image": "test"}})
+            res = client.post("/call", json={"tool": "yolo2026_detect", "arguments": {"image": "test"}})
         assert res.status_code == 401
         assert "Missing X-API-Key header" in res.text
 
@@ -58,7 +58,7 @@ class TestSecurityAuth:
         with TestClient(main.app) as client:
             res = client.post(
                 "/call",
-                json={"tool": "yolo26_detect", "arguments": {"image": "test"}},
+                json={"tool": "yolo2026_detect", "arguments": {"image": "test"}},
                 headers={"X-API-Key": "wrong-key"}
             )
         assert res.status_code == 403
@@ -75,7 +75,7 @@ class TestSecurityAuth:
         with TestClient(main.app) as client:
             res = client.post(
                 "/call",
-                json={"tool": "yolo26_detect", "arguments": {"image": "test"}},
+                json={"tool": "yolo2026_detect", "arguments": {"image": "test"}},
                 headers={"X-API-Key": "test-secret-key"}
             )
         assert res.status_code == 200
@@ -143,7 +143,7 @@ class TestSecurityAuth:
         import main
         importlib.reload(main)
         with TestClient(main.app) as client:
-            res = client.post("/call", json={"tool": "yolo26_detect", "arguments": {"image": "test"}})
+            res = client.post("/call", json={"tool": "yolo2026_detect", "arguments": {"image": "test"}})
         assert res.status_code == 200
 
     def test_websocket_wrong_key_closes_4001(self):
@@ -323,7 +323,7 @@ class TestMcpServer:
         import server.mcp.server as mcp_server
         importlib.reload(mcp_server)
         mcp_server.init_tools(mock_mode=False, camera_manager=None)
-        handler = mcp_server._TOOL_HANDLERS.get("yolo26_detect")
+        handler = mcp_server._TOOL_HANDLERS.get("yolo2026_detect")
         assert handler is not None
         assert handler.__name__ == "_real_yolov8"
 

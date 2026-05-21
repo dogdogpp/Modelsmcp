@@ -17,8 +17,8 @@ from . import register
 
 class YOLOHandler:
     name = "YOLO2026"
-    tool = "yolo26_detect"
-    model_id = "yolo26"
+    tool = "yolo2026_detect"
+    model_id = "yolo2026"
     description = "YOLO2026 目标检测"
     device = "CPU"
     parameters = {
@@ -44,15 +44,15 @@ class YOLOHandler:
             return self._model
 
         weights_dir = Path(__file__).resolve().parent.parent.parent / "models_storage"
-        weights_path = weights_dir / f"yolo26{size}.pt"
+        weights_path = weights_dir / f"yolo2026{size}.pt"
 
         if weights_path.exists():
             self._model = YOLO(str(weights_path))
         else:
             # Auto-download via ultralytics; ensure it lands in models_storage
             weights_dir.mkdir(parents=True, exist_ok=True)
-            self._model = YOLO(f"yolo26{size}.pt")
-            cwd_file = Path(f"yolo26{size}.pt")
+            self._model = YOLO(f"yolo2026{size}.pt")
+            cwd_file = Path(f"yolo2026{size}.pt")
             if cwd_file.exists():
                 shutil.move(str(cwd_file), str(weights_path))
 

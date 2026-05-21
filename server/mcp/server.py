@@ -80,7 +80,7 @@ def call_tool(request: CallRequest) -> CallResponse:
 
 # Tool-specific progress messages for SSE streaming
 _TOOL_PROGRESS_STEPS: dict[str, list[str]] = {
-    "yolo26_detect": ["正在加载 YOLO 模型...", "执行目标检测...", "解析检测结果..."],
+    "yolo2026_detect": ["正在加载 YOLO 模型...", "执行目标检测...", "解析检测结果..."],
     "whisper_transcribe": ["正在加载 Whisper 模型...", "预处理音频...", "执行语音转录...", "后处理结果..."],
     "camera_list": ["正在发现可用摄像头...", "获取摄像头状态..."],
     "camera_get_frame": ["正在连接摄像头...", "获取视频帧...", "编码图像..."],
@@ -182,7 +182,7 @@ def _decode_image(image_input: str) -> Image.Image:
     return Image.open(io.BytesIO(image_bytes)).convert("RGB")
 
 
-def _load_yolo_model(variant: str = "yolo26n"):
+def _load_yolo_model(variant: str = "yolo2026n"):
     """Lazily load a YOLO model (auto-downloads weights on first use)."""
     global _YOLO_MODEL
     if _YOLO_MODEL is None:
@@ -252,7 +252,7 @@ def _resolve_camera_id(raw_id: str | None) -> str | None:
 
 _TOOL_SCHEMAS_LIST = [
     McpToolSchema(
-        name="yolo26_detect",
+        name="yolo2026_detect",
         description="YOLO2026 object detection",
         inputSchema={
             "type": "object",
@@ -327,7 +327,7 @@ def _real_yolov8(args: dict[str, Any]) -> CallResponse:
     img = _decode_image(args["image"])
     conf = args.get("confidence", 0.5)
     classes = args.get("classes", [])
-    model = _load_yolo_model("yolo26n")
+    model = _load_yolo_model("yolo2026n")
     with _YOLO_LOCK:
         results = model(img, conf=conf, verbose=False)
     boxes = results[0].boxes
@@ -349,7 +349,7 @@ def _real_yolov8(args: dict[str, Any]) -> CallResponse:
     device = "cuda" if torch.cuda.is_available() else "cpu"
     return CallResponse(
         status="success",
-        model="yolo26",
+        model="yolo2026",
         inference_time=f"{elapsed}ms",
         device=device,
         result={"detections": detections, "total_objects": len(detections)},
@@ -360,11 +360,11 @@ def _real_yolov8(args: dict[str, Any]) -> CallResponse:
 # Fallback inference handlers (used when optional real handlers are unavailable)
 # ---------------------------------------------------------------------------
 
-def _mock_yolo26(args: dict[str, Any]) -> CallResponse:
+def _mock_yolo2026(args: dict[str, Any]) -> CallResponse:
     time.sleep(0.012)
     return CallResponse(
         status="success",
-        model="yolo26",
+        model="yolo2026",
         inference_time="12ms",
         device="cuda",
         result={
@@ -540,7 +540,7 @@ def _camera_get_last_detection(args: dict[str, Any]) -> CallResponse:
 # ---------------------------------------------------------------------------
 
 _MODEL_STATUS = {
-    "yolo26": "online",
+    "yolo2026": "online",
     "whisper": "online",
 }
 
@@ -593,10 +593,10 @@ def init_tools(mock_mode: bool = False, camera_manager=None) -> None:
     global _CAMERA_MANAGER
     _CAMERA_MANAGER = camera_manager
     if mock_mode:
-        register_tool(_TOOL_SCHEMAS_LIST[0], _mock_yolo26)
+        register_tool(_TOOL_SCHEMAS_LIST[0], _mock_yolo2026)
     else:
         # Pre-load model on startup to avoid cold-start latency on first request
-        _load_yolo_model("yolo26n")
+        _load_yolo_model("yolo2026n")
         register_tool(_TOOL_SCHEMAS_LIST[0], _real_yolov8)
 
     # Bridge real Whisper handler when available in non-mock mode.
@@ -615,10 +615,10 @@ def init_tools(mock_mode: bool = False, camera_manager=None) -> None:
 
 
 def get_health() -> HealthResponse:
-    # Update yolo26 status based on whether real model is loaded
+    # Update yolo2026 status based on whether real model is loaded
     status_map = dict(_MODEL_STATUS)
     if _YOLO_MODEL is not None:
-        status_map["yolo26"] = "online"
+        status_map["yolo2026"] = "online"
     return HealthResponse(
         status="healthy",
         version="0.1.0",

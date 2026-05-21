@@ -326,7 +326,7 @@ async def lifespan(app: FastAPI):
     camera_manager = None
     if CAMERA_ENABLED:
         from mcp.server import _load_yolo_model
-        yolo_model = _load_yolo_model("yolo26n")
+        yolo_model = _load_yolo_model("yolo2026n")
         camera_manager = CameraManager(yolo_model, webhook_queue=webhook_queue)
         # Auto-start configured cameras
         available = camera_manager.discover_cameras()

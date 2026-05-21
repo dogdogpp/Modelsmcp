@@ -64,7 +64,7 @@ class TestSseAuth:
         with TestClient(main.app) as client:
             res = client.post(
                 "/sse",
-                json={"tool": "yolo26_detect", "arguments": {"image": "test"}},
+                json={"tool": "yolo2026_detect", "arguments": {"image": "test"}},
             )
         assert res.status_code == 401
 
@@ -79,7 +79,7 @@ class TestSseAuth:
         with TestClient(main.app) as client:
             res = client.post(
                 "/sse",
-                json={"tool": "yolo26_detect", "arguments": {"image": "test"}},
+                json={"tool": "yolo2026_detect", "arguments": {"image": "test"}},
                 headers={"X-API-Key": "wrong-key"},
             )
         assert res.status_code == 403
@@ -95,7 +95,7 @@ class TestSseAuth:
         with TestClient(main.app) as client:
             res = client.post(
                 "/sse",
-                json={"tool": "yolo26_detect", "arguments": {"image": "test"}},
+                json={"tool": "yolo2026_detect", "arguments": {"image": "test"}},
                 headers={"X-API-Key": "test-secret-key"},
             )
         assert res.status_code == 200
@@ -119,7 +119,7 @@ class TestSseEvents:
         with TestClient(main.app) as client:
             res = client.post(
                 "/sse",
-                json={"tool": "yolo26_detect", "arguments": {"image": "test"}},
+                json={"tool": "yolo2026_detect", "arguments": {"image": "test"}},
             )
         assert res.status_code == 200
         events = _parse_sse_events(res.text)
@@ -139,7 +139,7 @@ class TestSseEvents:
         with TestClient(main.app) as client:
             res = client.post(
                 "/sse",
-                json={"tool": "yolo26_detect", "arguments": {"image": "test"}},
+                json={"tool": "yolo2026_detect", "arguments": {"image": "test"}},
             )
         events = _parse_sse_events(res.text)
         result_event = [e for e in events if e["event"] == "result"][0]
@@ -180,7 +180,7 @@ class TestSseEvents:
         with TestClient(main.app) as client:
             res = client.post(
                 "/sse",
-                json={"tool": "yolo26_detect", "arguments": {"image": "test"}},
+                json={"tool": "yolo2026_detect", "arguments": {"image": "test"}},
             )
         events = _parse_sse_events(res.text)
         progress_events = [e for e in events if e["event"] == "progress"]
@@ -238,11 +238,11 @@ class TestSseEvents:
         with TestClient(main.app) as client:
             sync_res = client.post(
                 "/call",
-                json={"tool": "yolo26_detect", "arguments": {"image": "test"}},
+                json={"tool": "yolo2026_detect", "arguments": {"image": "test"}},
             )
             sse_res = client.post(
                 "/sse",
-                json={"tool": "yolo26_detect", "arguments": {"image": "test"}},
+                json={"tool": "yolo2026_detect", "arguments": {"image": "test"}},
             )
         assert sync_res.status_code == 200
         assert sync_res.headers.get("content-type") == "application/json"
@@ -260,7 +260,7 @@ class TestSseEvents:
         with TestClient(main.app) as client:
             res = client.post(
                 "/sse",
-                json={"tool": "yolo26_detect", "arguments": {"image": "test"}},
+                json={"tool": "yolo2026_detect", "arguments": {"image": "test"}},
             )
         assert res.status_code == 200
         assert "no-cache" in res.headers.get("cache-control", "")

@@ -10,9 +10,9 @@ inference:
   timeout: 30s
 
 models:
-  yolo26:
+  yolo2026:
     enabled: true
-    variant: "yolo26m"
+    variant: "yolo2026m"
     weights: "auto"
   paddleocr:
     enabled: true
